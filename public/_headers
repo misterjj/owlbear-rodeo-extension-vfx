@@ -1,0 +1,6 @@
+/manifest.json
+  Access-Control-Allow-Origin: *
+/icon.svg
+  Access-Control-Allow-Origin: *
+/vfx/*
+  Access-Control-Allow-Origin: *
