@@ -1,0 +1,56 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  font: 13px/1.35 system-ui, sans-serif; color: #eef0f6; background: #2a2d3a;
+  user-select: none;
+}
+.bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 2px; }
+.bar strong { font-size: 14px; }
+.close {
+  all: unset; width: 24px; height: 24px; line-height: 24px; text-align: center;
+  border-radius: 4px; cursor: pointer;
+}
+.close:hover, .close:focus-visible { background: rgb(255 255 255 / 0.14); }
+section { padding: 6px 12px; }
+h2 { margin: 0 0 5px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #a9adbd; }
+.choices { display: grid; gap: 4px; }
+.elements, .styles { grid-template-columns: repeat(3, 1fr); font-size: 12px; }
+.sizes { grid-template-columns: repeat(5, 1fr); }
+.choices button {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 28px;
+  padding: 2px 4px; border-radius: 6px; background: rgb(255 255 255 / 0.07); cursor: pointer;
+  border: 2px solid transparent; text-align: center;
+}
+.elements button { justify-content: flex-start; }
+.choices button:hover { background: rgb(255 255 255 / 0.15); }
+.choices button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.choices button[aria-pressed="true"] { border-color: #bb99ff; background: rgb(187 153 255 / 0.22); font-weight: 600; }
+.swatch { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgb(255 255 255 / 0.5); }
+.off { opacity: 0.45; }
+.favorites { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 5px; }
+.favorite { display: inline-flex; border-radius: 6px; background: rgb(255 255 255 / 0.07); max-width: 100%; }
+.favorite button {
+  all: unset; box-sizing: border-box; min-height: 26px; padding: 2px 8px; font-size: 12px; cursor: pointer;
+  border-radius: 6px; border: 2px solid transparent; overflow-wrap: anywhere;
+}
+.favorite button:hover { background: rgb(255 255 255 / 0.15); }
+.favorite button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.favorite button[aria-pressed="true"] { border-color: #bb99ff; background: rgb(187 153 255 / 0.22); font-weight: 600; }
+.favorite .remove { padding: 2px 6px; color: #a9adbd; }
+.save { display: flex; gap: 4px; }
+input[type="text"], input[type="number"] {
+  box-sizing: border-box; min-width: 0; height: 28px; padding: 2px 6px; border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: 6px; background: rgb(0 0 0 / 0.22); color: inherit; font: inherit; font-size: 12px; user-select: text;
+}
+input:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.save input { flex: 1; }
+.save button {
+  all: unset; box-sizing: border-box; padding: 2px 8px; border-radius: 6px; font-size: 12px; line-height: 24px;
+  background: rgb(255 255 255 / 0.12); cursor: pointer;
+}
+.save button:hover { background: rgb(255 255 255 / 0.2); }
+.save button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.exact { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
+.exact input { width: 64px; margin-left: auto; }
+.option { display: flex; align-items: center; gap: 6px; min-height: 24px; font-size: 12px; cursor: pointer; }
+.hint { margin: 2px 12px 10px; padding: 7px 8px; border-radius: 6px; background: rgb(0 0 0 / 0.22); color: #d6d9e4; font-size: 12px; }

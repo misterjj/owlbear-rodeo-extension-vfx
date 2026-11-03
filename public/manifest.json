@@ -1,9 +1,9 @@
 {
   "name": "Effets visuels",
-  "version": "0.1.0",
+  "version": "0.6.0",
   "manifest_version": 1,
   "author": "Jonathan Jorand",
-  "description": "Explosions et projectiles animés, lancés par le MJ et visibles par toute la salle.",
+  "description": "15 styles et 16 éléments : coups, flèches, sorts et explosions, lancés par le MJ ou les joueurs et vus par la salle.",
   "icon": "/icon.svg",
   "background_url": "/background.html"
 }
