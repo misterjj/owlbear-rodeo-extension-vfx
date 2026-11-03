@@ -54,6 +54,22 @@ import {
   type TokenArea,
 } from "./fx";
 import {
+  FX_PROGRAMS_KEY,
+  FX_PROGRAMS_WINDOW_ID,
+  FX_PROGRAM_CHANNEL,
+  markedAnchors,
+  nextShot,
+  programsIn,
+  shotAfter,
+  shotAnchors,
+  shotRandom,
+  withActive,
+  type Anchor,
+  type Program,
+  type Shot,
+} from "./fx-programs";
+import { openWindow, setupWindowHost } from "./window-host";
+import {
   ARROW_SKSL,
   AURA_SKSL,
   BEAM_SKSL,
@@ -71,15 +87,21 @@ import {
   WALL_SKSL,
 } from "./fx-shaders";
 
-const PANEL_WIDTH = 320;
-const PANEL_HEIGHT_GM = 800;
+const PANEL_HEIGHT_GM = 830;
 const PANEL_HEIGHT_PLAYER = 724;
+const PROGRAMS_HEIGHT = 620;
 const WHEEL_SIZE = 340;
 const FRAME_MS = 33;
 /** Au-delà, un nouvel effet est ignoré pour ne pas ralentir les petites machines. */
 const MAX_ACTIVE = 6;
 /** Les joueurs ne peuvent pas occuper toute la place : le MJ doit pouvoir lancer les siens. */
 const MAX_ACTIVE_FROM_PLAYERS = 4;
+/** Un décor animé ne doit jamais empêcher de lancer un sort à la main. */
+const MAX_ACTIVE_FROM_PROGRAMS = 3;
+/** Un tir plus ancien est abandonné : l'onglet était en arrière-plan, ou la machine en retard. */
+const STALE_SHOT_MS = 1500;
+const PROGRAM_TICK_MS = 100;
+const FX_MARKER_PREFIX = "vfx-owlbear/repere/";
 
 let active = 0;
 
@@ -536,6 +558,8 @@ async function reconcileDurables() {
   ]);
   const entries = durablesIn(metadata);
   const carriers = new Map(items.map((item) => [item.id, item]));
+  syncPrograms(programsIn(metadata));
+  await syncMarkers(items.map(({ id }) => id), dpi);
   const local = await OBR.scene.local.getItems((item) =>
     item.id.startsWith(FX_DURABLE_ITEM_PREFIX),
   );
@@ -566,6 +590,157 @@ async function reconcileDurables() {
   // Le porteur a été supprimé : le MJ nettoie la description pour tout le monde.
   const orphans = entries.filter(({ carrier }) => carrier && !carriers.has(carrier.id));
   if (role === "GM" && orphans.length) await saveDurables(entries.filter((e) => !orphans.includes(e)));
+}
+
+let programs: Program[] = [];
+let programTimer: ReturnType<typeof setInterval> | undefined;
+const programClocks = new Map<string, { startedAt: number; shot: Shot | undefined }>();
+/** Points du programme en cours d'édition dans la fenêtre du MJ. */
+let draftAnchors: Anchor[] = [];
+let markerSignature = "";
+
+/** Démarre l'horloge seulement s'il y a un programme actif, et oublie ceux qui ont disparu. */
+function syncPrograms(list: Program[]) {
+  programs = list;
+  const ids = new Set(list.filter(({ active }) => active).map(({ id }) => id));
+  for (const id of programClocks.keys()) if (!ids.has(id)) programClocks.delete(id);
+  if (ids.size && !programTimer) programTimer = setInterval(runPrograms, PROGRAM_TICK_MS);
+  if (!ids.size && programTimer) {
+    clearInterval(programTimer);
+    programTimer = undefined;
+  }
+}
+
+function runPrograms() {
+  const now = Date.now();
+  for (const program of programs) {
+    if (!program.active) continue;
+    let clock = programClocks.get(program.id);
+    if (!clock || clock.startedAt !== program.startedAt) {
+      // On repart un peu en arrière : le premier tir d'un programme tout juste activé est déjà échu.
+      clock = { startedAt: program.startedAt, shot: shotAfter(program, now - STALE_SHOT_MS) };
+      programClocks.set(program.id, clock);
+    }
+    while (clock.shot && clock.shot.time <= now) {
+      if (now - clock.shot.time < STALE_SHOT_MS) fireProgram(program, clock.shot.index).catch(warn);
+      clock.shot = nextShot(program, clock.shot);
+    }
+    if (!clock.shot) finishProgram(program);
+  }
+}
+
+const finishing = new Set<string>();
+
+/** Série terminée : le MJ le note pour tout le monde, et le programme peut être relancé. */
+function finishProgram({ id, startedAt }: Program) {
+  const key = `${id}/${startedAt}`;
+  if (role !== "GM" || finishing.has(key)) return;
+  finishing.add(key);
+  OBR.scene
+    .getMetadata()
+    .then((metadata) => {
+      const current = programsIn(metadata);
+      // S'il a été relancé entre-temps, ce n'est plus la même série.
+      if (!current.some((p) => p.id === id && p.startedAt === startedAt)) return undefined;
+      return OBR.scene.setMetadata({
+        [FX_PROGRAMS_KEY]: withActive(current, [id], false, Date.now()),
+      });
+    })
+    .catch(warn);
+}
+
+/** Chaque joueur calcule le même tir de son côté : aucun message n'est échangé. */
+async function fireProgram(program: Program, index: number) {
+  const anchors = shotAnchors(program, index);
+  if (!anchors) return;
+  const areas = await loadTokenAreas();
+  // Un token caché ou supprimé est introuvable : ce tir n'a pas lieu, et rien n'est trahi.
+  const place = ({ at, token }: Anchor) =>
+    token ? areas.find(({ id }) => id === token.id)?.center : at;
+  const at = place(anchors.at);
+  const from = anchors.from && place(anchors.from);
+  if (!at || (anchors.from && !from)) return;
+  const choice = { ...program, gmOnly: false, durable: false };
+  const message = buildMessage(choice, at, from, await cellValue(), shotRandom(program, index, 3) * 100);
+  await play(message, MAX_ACTIVE_FROM_PROGRAMS);
+}
+
+/** Repères visibles du MJ seul. Ils ne sont refaits que si la liste des points a changé. */
+async function syncMarkers(itemIds: string[], dpi: number) {
+  const present = new Set(itemIds);
+  const anchors =
+    role === "GM"
+      ? markedAnchors(programs, draftAnchors).filter(({ token }) => !token || present.has(token.id))
+      : [];
+  const signature = JSON.stringify(anchors);
+  if (signature === markerSignature) return;
+  markerSignature = signature;
+  const old = await OBR.scene.local.getItems((item) => item.id.startsWith(FX_MARKER_PREFIX));
+  if (old.length) await OBR.scene.local.deleteItems(old.map(({ id }) => id));
+  if (!anchors.length) return;
+  await OBR.scene.local.addItems(
+    await Promise.all(
+      anchors.map(async ({ at, token }, index) => {
+        const center = token ? (await OBR.scene.items.getItemBounds([token.id])).center : at;
+        const size = dpi * 0.45;
+        const marker = buildShape()
+          .id(`${FX_MARKER_PREFIX}${index}`)
+          .shapeType("CIRCLE")
+          .width(size)
+          .height(size)
+          // Le cercle se dessine à partir de son centre.
+          .position(center)
+          .fillOpacity(0)
+          .strokeColor("#bb99ff")
+          .strokeOpacity(0.9)
+          .strokeWidth(dpi * 0.03)
+          .strokeDash([dpi * 0.06, dpi * 0.05])
+          .layer("POINTER")
+          .locked(true)
+          .disableHit(true);
+        if (token) marker.attachedTo(token.id).disableAttachmentBehavior(["SCALE", "ROTATION", "LOCKED"]);
+        return marker.build();
+      }),
+    ),
+  );
+}
+
+async function openProgramsWindow() {
+  if (role === "GM") await openWindow("programs");
+}
+
+/** Clics sur la carte demandés par la fenêtre des programmes, et outil à retrouver ensuite. */
+let picking: { tool: string; mode: string | undefined } | undefined;
+
+const postToWindow = (data: unknown) =>
+  OBR.broadcast.sendMessage(FX_PROGRAM_CHANNEL, data, { destination: "LOCAL" }).catch(warn);
+
+async function startPicking() {
+  const [tool, mode] = await Promise.all([OBR.tool.getActiveTool(), OBR.tool.getActiveToolMode()]);
+  picking = { tool, mode };
+  await clearSource();
+  await OBR.tool.activateTool(FX_TOOL_ID);
+  await OBR.tool.activateMode(FX_TOOL_ID, MODE_ID);
+}
+
+async function stopPicking() {
+  if (!picking) return;
+  const { tool, mode } = picking;
+  picking = undefined;
+  await postToWindow({ type: "pick-stopped" });
+  await OBR.tool.activateTool(tool);
+  if (mode) await OBR.tool.activateMode(tool, mode);
+}
+
+function handleProgramMessage(data: unknown) {
+  const message = data as { type?: string; anchors?: Anchor[] } | null;
+  if (message?.type === "open-window") openProgramsWindow().catch(warn);
+  else if (message?.type === "pick-start") startPicking().catch(warn);
+  else if (message?.type === "pick-stop") stopPicking().catch(warn);
+  else if (message?.type === "draft") {
+    draftAnchors = Array.isArray(message.anchors) ? message.anchors : [];
+    scheduleReconcile();
+  }
 }
 
 let reconciling = false;
@@ -717,7 +892,7 @@ async function drawPreview(event: ToolEvent) {
   const scale = effectScale(choice.style, choice.size, exactCells(choice, multiplier));
   const outline = previewOutline(choice.style, source, point, dpi * STYLES[choice.style].reach * scale);
   if (!toolActive) return;
-  if (!outline) {
+  if (!outline || picking) {
     if (previewShown) await hidePreview();
     return;
   }
@@ -809,6 +984,14 @@ async function teleport(
 }
 
 async function handleClick(event: ToolEvent) {
+  if (picking) {
+    const picked = await tokenUnderPointer(event);
+    const anchor: Anchor = picked
+      ? { at: picked.center, token: { id: picked.id, name: picked.name } }
+      : { at: event.pointerPosition };
+    await postToWindow({ type: "picked", anchor });
+    return;
+  }
   const choice = currentChoice();
   const [token, multiplier] = await Promise.all([tokenUnderPointer(event), cellValue()]);
   const point = token?.center ?? event.pointerPosition;
@@ -848,28 +1031,14 @@ async function handleClick(event: ToolEvent) {
 }
 
 async function openPanel() {
-  if (role !== "GM" && !playersAllowed) return;
-  const viewportHeight = await OBR.viewport.getHeight();
-  await OBR.popover.close(FX_PANEL_ID);
-  await OBR.popover.open({
-    id: FX_PANEL_ID,
-    url: "/panel.html",
-    width: PANEL_WIDTH,
-    height: Math.min(role === "GM" ? PANEL_HEIGHT_GM : PANEL_HEIGHT_PLAYER, viewportHeight - 88),
-    anchorReference: "POSITION",
-    anchorPosition: { left: 72, top: 72 },
-    anchorOrigin: { horizontal: "LEFT", vertical: "TOP" },
-    transformOrigin: { horizontal: "LEFT", vertical: "TOP" },
-    // La carte reste cliquable : c'est là qu'on lance les effets.
-    disableClickAway: true,
-    marginThreshold: 8,
-  });
+  if (role === "GM" || playersAllowed) await openWindow("panel");
 }
 
 const MODE_ID = `${FX_TOOL_ID}/lancer`;
 const WHEEL_MODE_ID = `${FX_TOOL_ID}/roue`;
 const ACTION_ID = `${FX_TOOL_ID}/reglages`;
 const MENU_ID = `${FX_TOOL_ID}/menu-sorts`;
+const PROGRAMS_ACTION_ID = `${FX_TOOL_ID}/programmes`;
 
 async function createTool() {
   const whenActive = { activeTools: [FX_TOOL_ID] };
@@ -890,16 +1059,22 @@ async function createTool() {
       updatePreview(event).catch(warn);
     },
     onKeyDown(_context, event) {
-      if (event.key === "Escape") clearSource().then(endAiming).catch(warn);
+      if (event.key === "Escape") {
+        clearSource().then(endAiming).then(stopPicking).catch(warn);
+      }
     },
     onActivate() {
       toolActive = true;
       // Pendant une visée, le panneau ne ferait que masquer la carte.
-      if (!aiming) openPanel().catch(warn);
+      if (!aiming && !picking) openPanel().catch(warn);
     },
     onDeactivate() {
       toolActive = false;
       aiming = undefined;
+      if (picking) {
+        picking = undefined;
+        postToWindow({ type: "pick-stopped" });
+      }
       clearSource();
       OBR.popover.close(FX_PANEL_ID).catch(warn);
     },
@@ -913,6 +1088,20 @@ async function createTool() {
         .then((token) => (token ? openWheel(token.id) : undefined))
         .catch(warn);
       return false;
+    },
+  });
+  await OBR.tool.createAction({
+    id: PROGRAMS_ACTION_ID,
+    icons: [
+      {
+        icon: "/vfx/programmes.svg",
+        label: "Programmes d'effets",
+        // Sans outil imposé : la fenêtre doit pouvoir s'ouvrir pendant le reste de la partie.
+        filter: { roles: ["GM"] },
+      },
+    ],
+    onClick() {
+      openProgramsWindow().catch(warn);
     },
   });
   await OBR.contextMenu.create({
@@ -950,6 +1139,7 @@ async function removeTool() {
   await OBR.popover.close(FX_WHEEL_ID).catch(warn);
   await endAiming().catch(warn);
   await OBR.contextMenu.remove(MENU_ID);
+  await OBR.tool.removeAction(PROGRAMS_ACTION_ID);
   await OBR.tool.removeAction(ACTION_ID);
   await OBR.tool.removeMode(WHEEL_MODE_ID);
   await OBR.tool.removeMode(MODE_ID);
@@ -991,6 +1181,14 @@ async function castLimit(connectionId: string) {
 }
 
 export async function setupFx() {
+  setupWindowHost({
+    fullHeight: (kind) =>
+      kind === "programs" ? PROGRAMS_HEIGHT : role === "GM" ? PANEL_HEIGHT_GM : PANEL_HEIGHT_PLAYER,
+    canShow: async (kind) =>
+      kind === "programs"
+        ? role === "GM"
+        : (role === "GM" || playersAllowed) && (await OBR.tool.getActiveTool()) === FX_TOOL_ID,
+  });
   OBR.broadcast.onMessage(FX_CHANNEL, ({ data, connectionId }) => {
     const message = parseFxMessage(data);
     if (!message || (message.gmOnly && role !== "GM")) return;
@@ -1002,17 +1200,25 @@ export async function setupFx() {
     const cast = parseWheelCast(data);
     if (cast) castFromToken(cast.token, cast.spell).catch(warn);
   });
+  OBR.broadcast.onMessage(FX_PROGRAM_CHANNEL, ({ data }) => handleProgramMessage(data));
   OBR.scene.items.onChange(() => {
     tokenAreas = undefined;
     scheduleReconcile();
   });
   OBR.scene.onMetadataChange(() => scheduleReconcile());
   OBR.scene.onReadyChange((ready) => {
-    if (ready) scheduleReconcile();
+    if (ready) {
+      // Les repères locaux ne survivent pas à un changement de scène.
+      markerSignature = "";
+      scheduleReconcile();
+    } else {
+      syncPrograms([]);
+    }
   });
   OBR.player.onChange((player) => {
     if (player.role === role) return;
     role = player.role;
+    if (role !== "GM") OBR.popover.close(FX_PROGRAMS_WINDOW_ID).catch(warn);
     tokenAreas = undefined;
     syncTool();
     scheduleReconcile();

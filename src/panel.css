@@ -5,7 +5,10 @@ body {
   user-select: none;
 }
 .bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 2px; }
+.bar { cursor: grab; touch-action: none; }
+.dragging, .dragging * { cursor: grabbing !important; }
 .bar strong { font-size: 14px; }
+.bar-buttons { display: flex; gap: 2px; }
 .close {
   all: unset; width: 24px; height: 24px; line-height: 24px; text-align: center;
   border-radius: 4px; cursor: pointer;
@@ -63,4 +66,11 @@ input:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
 }
 .running button:hover, .stop-all:hover { background: rgb(255 255 255 / 0.2); }
 .running button:focus-visible, .stop-all:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.programs { margin-top: 4px; }
 .hint { margin: 2px 12px 10px; padding: 7px 8px; border-radius: 6px; background: rgb(0 0 0 / 0.22); color: #d6d9e4; font-size: 12px; }
+.compact #app { display: flow-root; }
+.compact .bar { padding: 5px 8px 0; }
+.current { display: flex; align-items: center; gap: 6px; margin: 2px 10px 6px; font-weight: 600; font-size: 12px; overflow-wrap: anywhere; }
+.compact-favorites { margin: 0 10px 6px; }
+.compact #running section { padding: 2px 10px; }
+.compact .hint { margin: 2px 10px 8px; padding: 5px 7px; }

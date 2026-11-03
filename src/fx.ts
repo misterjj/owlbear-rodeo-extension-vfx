@@ -304,16 +304,16 @@ export interface FxMessage extends FxCast {
   gmOnly?: true;
 }
 
-const isKeyOf = <T extends object>(table: T, value: unknown): value is keyof T =>
+export const isKeyOf = <T extends object>(table: T, value: unknown): value is keyof T =>
   typeof value === "string" && Object.hasOwn(table, value);
 
-const isExact = (value: unknown): value is number =>
+export const isExact = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value > 0;
 
 /** Au-delà, une zone couvrirait la carte et ralentirait tout le monde. */
 const MAX_CELLS = 40;
 
-const isPoint = (value: unknown): value is Point => {
+export const isPoint = (value: unknown): value is Point => {
   const point = value as Partial<Point> | null;
   return Number.isFinite(point?.x) && Number.isFinite(point?.y);
 };

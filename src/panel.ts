@@ -24,6 +24,8 @@ import {
   type FxCast,
   type Rgb,
 } from "./fx";
+import { FX_PROGRAM_CHANNEL } from "./fx-programs";
+import { bindResize, fitCompactHeight, resizeButton, setupWindowDrag, windowPrefs } from "./window-drag";
 import "./panel.css";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -33,6 +35,9 @@ let isGm = false;
 let playersAllowed = false;
 let unit = "cases";
 let running: DurableEntry[] = [];
+const compact = windowPrefs.compact;
+/** La fenêtre est rechargée quand elle bouge ou change de format : le nom en cours de saisie y survit. */
+const TYPING_KEY = `${FX_PANEL_ID}/saisie`;
 
 const css = ([r, g, b]: Rgb) => `rgb(${r * 255} ${g * 255} ${b * 255})`;
 
@@ -135,6 +140,7 @@ function renderRunning() {
   const container = app.querySelector<HTMLDivElement>("#running");
   if (!container) return;
   container.innerHTML = runningList();
+  if (compact) fitCompactHeight("panel", FX_PANEL_ID, app);
   container.querySelectorAll<HTMLButtonElement>("[data-stop]").forEach((element) => {
     element.onclick = () => stopDurables([element.dataset.stop!]).catch(warn);
   });
@@ -154,6 +160,7 @@ function optionsSection() {
       <h2>Options</h2>
       <label class="option"><input id="gm-only" type="checkbox" ${choice.gmOnly ? "checked" : ""} /> Visible par le MJ seulement</label>
       <label class="option"><input id="players" type="checkbox" ${playersAllowed ? "checked" : ""} /> Les joueurs peuvent lancer des effets</label>
+      <button type="button" class="stop-all programs" id="programs">Programmes…</button>
     </section>`;
 }
 
@@ -162,12 +169,92 @@ function update(next: Partial<typeof choice>) {
   saveChoice(localStorage, choice);
 }
 
-function render() {
-  app.innerHTML = `
-    <header class="bar">
-      <strong>Effets</strong>
+function saveTyping() {
+  try {
+    const typed = {
+      name: app.querySelector<HTMLInputElement>("#favorite-name")?.value ?? "",
+      scroll: document.scrollingElement?.scrollTop ?? 0,
+    };
+    sessionStorage.setItem(TYPING_KEY, JSON.stringify(typed));
+  } catch (error) {
+    warn(error);
+  }
+}
+
+function restoreTyping() {
+  try {
+    const saved = sessionStorage.getItem(TYPING_KEY);
+    sessionStorage.removeItem(TYPING_KEY);
+    if (!saved) return;
+    const { name, scroll } = JSON.parse(saved) as { name: string; scroll: number };
+    const input = app.querySelector<HTMLInputElement>("#favorite-name");
+    if (input) input.value = name;
+    document.scrollingElement?.scrollTo(0, scroll);
+  } catch (error) {
+    warn(error);
+  }
+}
+
+const titleBar = () => `
+  <header class="bar" title="Glisser pour déplacer">
+    <strong>Effets</strong>
+    <span class="bar-buttons">
+      ${resizeButton("close")}
       <button type="button" class="close" id="close" title="Fermer">✕</button>
-    </header>
+    </span>
+  </header>`;
+
+function bindTitleBar() {
+  app.querySelector<HTMLButtonElement>("#close")!.onclick = () => OBR.popover.close(FX_PANEL_ID);
+  bindResize("panel", app, saveTyping);
+}
+
+function bindFavoriteChoices() {
+  app.querySelectorAll<HTMLButtonElement>("[data-favorite]").forEach((element) => {
+    element.onclick = () => {
+      const { element: fxElement, style, size, exact, durable } =
+        favorites[Number(element.dataset.favorite)];
+      update({ element: fxElement, style, size, exact, durable: durable === true });
+      render();
+    };
+  });
+}
+
+/** L'essentiel pour jouer : ce qui partira au prochain clic, et de quoi changer d'effet ou en retirer un. */
+function renderCompact() {
+  const { label, palette } = ELEMENTS[choice.element];
+  const measure = usesExact() ? `${choice.exact} ${escapeHtml(unit)}` : choice.size;
+  const extras = [isDurable(choice) ? "durable" : "", choice.gmOnly ? "MJ seul" : ""].filter(Boolean);
+  const chips = favorites
+    .map(
+      (favorite, index) => `
+        <span class="favorite">
+          <button type="button" data-favorite="${index}" aria-pressed="${matchesFavorite(favorite, choice)}">${escapeHtml(favorite.name)}</button>
+        </span>`,
+    )
+    .join("");
+  app.innerHTML = `
+    ${titleBar()}
+    <p class="current">
+      <span class="swatch" style="background: radial-gradient(${css(palette[2])}, ${css(palette[1])} 55%, ${css(palette[0])})"></span>
+      <span>${[label, STYLES[choice.style].label, measure, ...extras].join(" · ")}</span>
+    </p>
+    ${chips ? `<div class="favorites compact-favorites">${chips}</div>` : ""}
+    <div id="running"></div>
+    <p class="hint" id="hint">${hint()}</p>`;
+  bindTitleBar();
+  bindFavoriteChoices();
+  renderRunning();
+  fitCompactHeight("panel", FX_PANEL_ID, app);
+}
+
+function render() {
+  if (compact) {
+    renderCompact();
+    return;
+  }
+  app.innerHTML = `
+    ${titleBar()}
     ${favoritesSection()}
     <section>
       <h2>Élément</h2>
@@ -197,7 +284,7 @@ function render() {
     ${optionsSection()}
     <p class="hint" id="hint">${hint()}</p>`;
 
-  app.querySelector<HTMLButtonElement>("#close")!.onclick = () => OBR.popover.close(FX_PANEL_ID);
+  bindTitleBar();
   app.querySelectorAll<HTMLButtonElement>("[data-group]").forEach((element) => {
     element.onclick = () => {
       update({ [element.dataset.group!]: element.dataset.value! });
@@ -207,14 +294,7 @@ function render() {
       )?.focus();
     };
   });
-  app.querySelectorAll<HTMLButtonElement>("[data-favorite]").forEach((element) => {
-    element.onclick = () => {
-      const { element: fxElement, style, size, exact, durable } =
-        favorites[Number(element.dataset.favorite)];
-      update({ element: fxElement, style, size, exact, durable: durable === true });
-      render();
-    };
-  });
+  bindFavoriteChoices();
   app.querySelectorAll<HTMLButtonElement>("[data-remove]").forEach((element) => {
     element.onclick = () => {
       favorites = favorites.filter((_, index) => index !== Number(element.dataset.remove));
@@ -242,6 +322,13 @@ function render() {
         element.setAttribute("aria-pressed", String(matchesFavorite(favorite, choice)));
       });
     };
+  }
+  const programs = app.querySelector<HTMLButtonElement>("#programs");
+  if (programs) {
+    programs.onclick = () =>
+      OBR.broadcast
+        .sendMessage(FX_PROGRAM_CHANNEL, { type: "open-window" }, { destination: "LOCAL" })
+        .catch(warn);
   }
   const durable = app.querySelector<HTMLInputElement>("#durable");
   if (durable) {
@@ -284,5 +371,8 @@ OBR.onReady(async () => {
     readRunning(await OBR.scene.getMetadata());
   }
   OBR.scene.onMetadataChange(readRunning);
+  document.documentElement.classList.toggle("compact", compact);
   render();
+  restoreTyping();
+  setupWindowDrag("panel", app, saveTyping);
 });

@@ -18,6 +18,10 @@ Le dernier choix est conservé.
 - **Taille :** XS, S, M, L ou XL. Pour un sort de zone (explosion, pluie, dôme, aura, soin, cône),
   un rayon ou une longueur exacte se donne dans l'unité de la scène.
 
+Glisse la barre de titre du panneau pour le déplacer. Le bouton **–** le réduit à l'essentiel : l'effet
+en cours, les favoris pour en changer et les effets durables. La place et le format sont conservés, et
+la fenêtre des programmes fonctionne de la même façon.
+
 Un contour montre la zone touchée avant de lancer. Les **favoris** enregistrent un réglage sous un
 nom, dans ce navigateur ; reprendre un nom existant le remplace.
 
@@ -33,6 +37,25 @@ jusqu'à ce qu'on le retire, et se voit aussi pour ceux qui arrivent en cours de
 Un sort durable de la roue s'allume et s'éteint d'un clic sur son bouton. Un nuage de ténèbres est
 presque opaque, y compris pour le MJ. Avec **Visible par le MJ seulement**, les joueurs ne le reçoivent
 pas à l'écran. Ces effets ne connaissent pas les murs et ne changent rien aux règles de vision.
+
+## Programmes
+
+Un programme relance un effet tout seul, tant qu'il est actif : un canon qui tire toutes les 3
+secondes, ou des éclairs entre deux poteaux à intervalle variable. Le bouton **Programmes** de l'outil,
+ou celui du panneau, ouvre leur liste (8 au plus par scène). Le bouton reste disponible pour le MJ quel
+que soit l'outil en main, et la fenêtre reste ouverte quand tu changes d'outil. Réduite, elle se limite
+à une liste qui active ou désactive programmes et groupes.
+
+- **Effet :** élément, style, taille ou zone exacte.
+- **Rythme :** intervalle minimum et maximum, décalage du premier tir, nombre de tirs (vide : sans fin).
+- **Points :** des positions sur la carte ou des tokens, placés d'un clic. Un effet dirigé va du premier
+  au second ; avec plus de deux points, ou pour un effet de zone, le point est tiré au hasard.
+- **Groupes :** ils s'activent ou se désactivent d'un coup. Les programmes activés ensemble partagent le
+  même départ, ce qui permet de les faire alterner avec le décalage.
+
+Seul le MJ les gère, et il voit un repère sur les points des programmes inactifs. Un tir ne part que
+d'un point visible : un token caché ou supprimé l'annule. C'est uniquement visuel. Les effets lancés à
+la main restent prioritaires.
 
 ## Sorts d'un token
 
