@@ -178,6 +178,7 @@ const commonUniforms = (element: ElementId, seed: number, unit: number): Uniform
     { name: "seed", value: seed },
     { name: "warp", value: look.warp },
     { name: "unit", value: unit },
+    { name: "sonic", value: look.sonic },
   ];
 };
 
@@ -293,12 +294,13 @@ async function play(message: FxMessage, limit: number) {
           { name: "target", value: vector(from, at) },
           { name: "width", value: dpi * 0.16 * scale },
           { name: "jag", value: look.jag },
+          { name: "radiant", value: look.radiant },
         ],
         scaledDuration(1000, scale),
       );
       break;
     case "chaine":
-      // Toujours en zigzag, quel que soit l'élément : c'est ce qui se lit comme un arc.
+      // En zigzag, ce qui se lit comme un arc, sauf pour une énergie pure ou une onde.
       await Promise.all([
         animate(
           BEAM_SKSL,
@@ -307,7 +309,8 @@ async function play(message: FxMessage, limit: number) {
             ...common,
             { name: "target", value: vector(from, at) },
             { name: "width", value: dpi * 0.1 * scale },
-            { name: "jag", value: Math.max(look.jag, 0.8) },
+            { name: "jag", value: look.radiant || look.sonic ? 0 : Math.max(look.jag, 0.8) },
+            { name: "radiant", value: look.radiant },
           ],
           scaledDuration(CHAIN_HOP_MS, scale),
         ),
@@ -323,6 +326,7 @@ async function play(message: FxMessage, limit: number) {
           { name: "target", value: coneTarget(from, at, dpi * STYLES.cone.reach * scale) },
           { name: "smoke", value: { x: look.smoke[0], y: look.smoke[1], z: look.smoke[2] } },
           { name: "rough", value: look.rough },
+          { name: "radiant", value: look.radiant },
         ],
         scaledDuration(1200, scale),
       );

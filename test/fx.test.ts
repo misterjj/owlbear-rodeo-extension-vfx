@@ -274,6 +274,14 @@ describe("réglages", () => {
     }
   });
 
+  it("réserve les rayons rectilignes et le cône en faisceaux à la lumière", () => {
+    expect(ELEMENT_IDS.filter((id) => ELEMENTS[id].radiant)).toEqual(["lumiere"]);
+  });
+
+  it("réserve la propagation en ondes au tonnerre", () => {
+    expect(ELEMENT_IDS.filter((id) => ELEMENTS[id].sonic)).toEqual(["tonnerre"]);
+  });
+
   it("propose tous les styles, et demande un lanceur seulement à ceux qui partent d'un point", () => {
     expect(STYLE_IDS).toHaveLength(18);
     expect(STYLE_IDS.filter((id) => STYLES[id].directed)).toEqual([

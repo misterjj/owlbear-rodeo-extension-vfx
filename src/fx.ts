@@ -40,6 +40,10 @@ export interface ElementLook {
   shock: number;
   /** Opacité d'un nuage : ceux qui doivent cacher ce qu'ils couvrent sont presque opaques. */
   density: number;
+  /** Énergie pure (1) : rayons rectilignes et cône en faisceaux, sans fumée. */
+  radiant: number;
+  /** Onde sonore (1) : l'énergie se propage en anneaux, sans fumée ni matière. */
+  sonic: number;
 }
 
 export const ELEMENTS = {
@@ -54,6 +58,8 @@ export const ELEMENTS = {
     warp: 0,
     shock: 0,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
   glace: {
     label: "Glace",
@@ -66,6 +72,8 @@ export const ELEMENTS = {
     warp: 0,
     shock: 0,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
   foudre: {
     label: "Foudre",
@@ -78,6 +86,8 @@ export const ELEMENTS = {
     warp: 0,
     shock: 0,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
   poison: {
     label: "Poison",
@@ -90,6 +100,8 @@ export const ELEMENTS = {
     warp: 0,
     shock: 0,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
   acide: {
     label: "Acide",
@@ -102,6 +114,8 @@ export const ELEMENTS = {
     warp: 0,
     shock: 0,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
   tenebres: {
     label: "Ténèbres",
@@ -114,6 +128,8 @@ export const ELEMENTS = {
     warp: 0,
     shock: 0,
     density: 0.93,
+    radiant: 0,
+    sonic: 0,
   },
   lumiere: {
     label: "Lumière",
@@ -126,6 +142,8 @@ export const ELEMENTS = {
     warp: 0,
     shock: 0,
     density: 0.6,
+    radiant: 1,
+    sonic: 0,
   },
   force: {
     label: "Force",
@@ -138,6 +156,8 @@ export const ELEMENTS = {
     warp: 0,
     shock: 0.3,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
   necrotique: {
     label: "Nécrotique",
@@ -150,6 +170,8 @@ export const ELEMENTS = {
     warp: 0.3,
     shock: 0,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
   psychique: {
     label: "Psychique",
@@ -162,18 +184,22 @@ export const ELEMENTS = {
     warp: 1,
     shock: 0.2,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
   tonnerre: {
     label: "Tonnerre",
-    palette: [[0.34, 0.38, 0.46], [0.72, 0.77, 0.86], [1, 1, 1]],
-    smoke: [0.5, 0.52, 0.56],
+    palette: [[0.5, 0.64, 0.84], [0.76, 0.86, 0.97], [0.97, 0.99, 1]],
+    smoke: [0.62, 0.7, 0.8],
     rough: 1.3,
     stretch: 0.4,
     fallSpeed: 1.6,
     jag: 0.5,
-    warp: 0,
+    warp: 0.2,
     shock: 1,
     density: 0.6,
+    radiant: 0,
+    sonic: 1,
   },
   physique: {
     label: "Physique",
@@ -186,6 +212,8 @@ export const ELEMENTS = {
     warp: 0,
     shock: 0.2,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
   sang: {
     label: "Sang",
@@ -198,6 +226,8 @@ export const ELEMENTS = {
     warp: 0,
     shock: 0,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
   eau: {
     label: "Eau",
@@ -210,6 +240,8 @@ export const ELEMENTS = {
     warp: 0.5,
     shock: 0.1,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
   terre: {
     label: "Terre",
@@ -222,6 +254,8 @@ export const ELEMENTS = {
     warp: 0,
     shock: 0,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
   vent: {
     label: "Vent",
@@ -234,6 +268,8 @@ export const ELEMENTS = {
     warp: 1.6,
     shock: 0.5,
     density: 0.6,
+    radiant: 0,
+    sonic: 0,
   },
 } as const satisfies Record<string, ElementLook>;
 

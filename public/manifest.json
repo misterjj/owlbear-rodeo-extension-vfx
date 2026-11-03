@@ -1,6 +1,6 @@
 {
   "name": "Effets visuels",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "manifest_version": 1,
   "author": "Jonathan Jorand",
   "description": "16 styles et 16 éléments : coups, flèches, sorts et explosions, lancés par le MJ ou les joueurs et vus par la salle.",

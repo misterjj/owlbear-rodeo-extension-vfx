@@ -32,6 +32,7 @@ ${timing.uniform}
 uniform float seed;
 uniform float warp;
 uniform float unit;
+uniform float sonic;
 
 float clock() {
   return ${timing.clock(seconds)};
@@ -69,6 +70,10 @@ vec3 ramp(float heat) {
     smoothstep(0.45, 1.0, heat)
   );
 }
+// Anneaux qui s'éloignent de la source : x est la distance, exprimée en nombre d'anneaux.
+float waves(float x, float speed) {
+  return pow(0.5 + 0.5 * sin((x - clock() * speed) * 6.2832), 6.0);
+}
 vec2 local(float2 coord) {
   vec2 p = (model * vec3(coord, 1.0)).xy;
   if (warp > 0.0) {
@@ -100,14 +105,14 @@ half4 main(float2 coord) {
   // Nuage qui reste après l'explosion.
   float smokeEdge = 1.0 - d / (0.55 + 0.6 * t) + (fbm(p * 2.4 + seed + t * 0.5) - 0.5) * 1.1;
   float smokeAlpha = smoothstep(0.0, 0.45, smokeEdge)
-    * smoothstep(0.18, 0.45, t) * (1.0 - smoothstep(0.6, 1.0, t)) * 0.72;
+    * smoothstep(0.18, 0.45, t) * (1.0 - smoothstep(0.6, 1.0, t)) * 0.72 * (1.0 - sonic);
   vec3 color = smoke * smokeAlpha;
   float alpha = smokeAlpha;
 
   // Boule d'énergie, qui s'éteint en grandissant.
   float body = 1.0 - d / max(grow * 0.92, 0.001) + (n - 0.5) * 1.15;
   float cooling = 1.0 - smoothstep(0.12, 0.72, t);
-  float bodyAlpha = smoothstep(0.0, 0.16, body) * (1.0 - smoothstep(0.45, 0.82, t)) * (1.0 - shock * 0.85);
+  float bodyAlpha = smoothstep(0.0, 0.16, body) * (1.0 - smoothstep(0.45, 0.82, t)) * (1.0 - shock * 0.85) * (1.0 - sonic);
   color = ramp(clamp(body * 1.25 * (0.3 + cooling), 0.0, 1.0)) * bodyAlpha + color * (1.0 - bodyAlpha);
   alpha = bodyAlpha + alpha * (1.0 - bodyAlpha);
 
@@ -132,9 +137,11 @@ half4 main(float2 coord) {
     vec2 offset = p - spark;
     sparks += exp(-dot(offset, offset) * 2600.0);
   }
-  sparks *= 1.0 - smoothstep(0.35, 0.8, t);
+  sparks *= (1.0 - smoothstep(0.35, 0.8, t)) * (1.0 - sonic);
+  // Une onde sonore continue de se propager derrière le premier front.
+  float echoes = sonic * waves(d * 5.0, 7.0) * (1.0 - smoothstep(grow * 1.1, grow * 1.25, d)) * (1.0 - smoothstep(0.35, 0.95, t)) * 0.85;
 
-  float glow = clamp(ring + flash + sparks, 0.0, 1.0);
+  float glow = clamp(ring + flash + sparks + echoes, 0.0, 1.0);
   color = palette[2] * glow + color * (1.0 - glow);
   alpha = glow + alpha * (1.0 - glow);
   return half4(color, alpha);
@@ -236,6 +243,7 @@ export const BEAM_SKSL = `${COMMON}
 uniform vec2 target;
 uniform float width;
 uniform float jag;
+uniform float radiant;
 
 half4 main(float2 coord) {
   vec2 p = local(coord);
@@ -254,7 +262,8 @@ half4 main(float2 coord) {
   float ends = smoothstep(0.0, len * 0.08, along) * smoothstep(0.0, len * 0.08, len - along);
   float jitter = floor(t * 18.0) * (0.2 + jag * 0.8);
   float wobble = (fbm(vec2(along / width * (0.12 + jag * 0.12) + seed, jitter)) - 0.5) * width * (1.2 + jag * 8.0);
-  float a = abs(across - wobble * ends) / width;
+  // Une énergie pure file tout droit.
+  float a = abs(across - wobble * ends * (1.0 - max(radiant, sonic))) / width;
 
   float core = exp(-a * a * 2.4);
   float halo = exp(-a * a * 0.25) * 0.42;
@@ -266,6 +275,16 @@ half4 main(float2 coord) {
   float hit = smoothstep(0.75, 1.0, reach / len) * exp(-dot(toTarget, toTarget) / (width * width * 5.0));
   float muzzle = exp(-dot(p, p) / (width * width * 3.0));
 
+  if (sonic > 0.5) {
+    // Anneaux qui filent vers la cible le long d'un trait à peine visible.
+    float bend = along / width - a * a * 0.3;
+    float pulses = waves(bend * 0.2, 11.0) * exp(-a * a * 0.2);
+    float line = exp(-a * a * 7.0) * 0.3;
+    float sound = clamp(((pulses + line) * tip * start + hit * 0.8 + muzzle * 0.4) * fade, 0.0, 1.0);
+    float soundAlpha = smoothstep(0.02, 0.6, sound);
+    return half4(ramp(sound) * soundAlpha, soundAlpha);
+  }
+
   float heat = clamp(((core + halo) * tip * start + hit + muzzle * 0.45) * fade, 0.0, 1.0);
   float alpha = smoothstep(0.02, 0.45, heat);
   return half4(ramp(heat) * alpha, alpha);
@@ -276,6 +295,7 @@ export const CONE_SKSL = `${COMMON}
 uniform vec2 target;
 uniform vec3 smoke;
 uniform float rough;
+uniform float radiant;
 
 half4 main(float2 coord) {
   vec2 p = local(coord);
@@ -288,6 +308,32 @@ half4 main(float2 coord) {
 
   float angle = atan(across, along);
   float reach = max((1.0 - pow(1.0 - clamp(t / 0.4, 0.0, 1.0), 2.0)) * len, 1.0);
+
+  if (radiant > 0.5) {
+    // Faisceaux qui partent du lanceur, sans le nuage qui ferait croire à de la poussière.
+    float side = 1.0 - abs(angle) / 0.56;
+    float front = 1.0 - r / reach;
+    float mask = smoothstep(0.0, 0.3, side) * smoothstep(0.0, 0.14, front);
+    float rays = 0.34 + pow(noise(vec2(angle * 13.0 + seed, seed)), 1.4) * 0.8
+      + noise(vec2(angle * 31.0 - seed, t * 2.5)) * 0.2;
+    float fade = 1.0 - smoothstep(0.5, 1.0, t);
+    float light = mask * rays * (1.0 - r / len * 0.72) * fade;
+    float source = exp(-r * r / (len * len * 0.012)) * fade * smoothstep(-0.2, 0.1, along / len);
+    float heat = clamp(light * 1.25 + source + 0.3, 0.0, 1.0);
+    float alpha = clamp(light * 1.05 + source, 0.0, 1.0);
+    return half4(ramp(heat) * alpha, alpha);
+  }
+
+  if (sonic > 0.5) {
+    // Arcs concentriques qui partent du lanceur, sans nuage ni fumée.
+    float mask = smoothstep(0.0, 0.14, 1.0 - abs(angle) / 0.56) * smoothstep(0.0, 0.08, 1.0 - r / reach);
+    float fade = 1.0 - smoothstep(0.5, 1.0, t);
+    float arcs = waves(r / len * 5.5, 8.0);
+    float sound = mask * (arcs * (1.0 - r / len * 0.5) + 0.07) * fade;
+    float alpha = clamp(sound * 1.1, 0.0, 1.0);
+    return half4(ramp(clamp(sound * 1.2 + 0.2, 0.0, 1.0)) * alpha, alpha);
+  }
+
   float n = fbm(vec2(r / len * 5.0 * rough - t * 6.0 + seed, angle * 3.0 * rough));
 
   // Le cône s'ouvre à partir du lanceur, avec un bord irrégulier.
@@ -329,6 +375,7 @@ half4 main(float2 coord) {
   float ringOffset = (d - 0.88 - (swirl - 0.5) * 0.1) / 0.085;
   float ring = exp(-ringOffset * ringOffset);
   float inside = (1.0 - smoothstep(0.1, 0.95, d)) * (0.08 + fbm(p * 3.0 + seed - now) * 0.4);
+  inside += sonic * waves(d * 3.5, 4.0) * (1.0 - smoothstep(0.7, 0.92, d)) * 0.7;
 
   // Particules qui montent.
   float motes = 0.0;
@@ -627,6 +674,7 @@ half4 main(float2 coord) {
   float rim = pow(clamp(d, 0.0, 1.0), 5.0);
   float n = fbm(p * 4.0 + vec2(seed, clock() * 3.0));
   float veil = 0.1 + smoothstep(0.42, 0.72, n) * 0.22;
+  veil = mix(veil, 0.04 + waves(d * 4.5, 3.0) * 0.5, sonic);
   vec2 sheenOffset = p - vec2(-0.36, -0.42) * size;
   float sheen = exp(-dot(sheenOffset, sheenOffset) * 9.0) * 0.3;
 
@@ -747,6 +795,7 @@ half4 main(float2 coord) {
   // Bruit lu sur le cercle plutôt que sur l'angle, qui ferait une coupure là où il saute de -π à π.
   float rippled = fbm(vec2(p.x, p.y) / max(d, 0.001) * 1.8 + vec2(seed, now * 6.0));
   float ground = gauss(d - 0.74 - 0.05 * sin(now * 9.0), 0.13) * (0.12 + rippled * 0.6) * grow;
+  ground += sonic * waves(d * 2.6, 3.5) * smoothstep(0.45, 0.65, d) * (1.0 - smoothstep(1.5, 2.2, d)) * 0.55 * grow;
 
   // Étincelles arrachées par la montée de l'énergie.
   float sparks = 0.0;
