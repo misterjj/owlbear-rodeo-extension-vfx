@@ -89,6 +89,7 @@ import {
   RAIN_SKSL,
   SLASH_SKSL,
   TELEPORT_SKSL,
+  TRANSFORMATION_SKSL,
   WALL_SKSL,
 } from "./fx-shaders";
 
@@ -363,6 +364,14 @@ async function play(message: FxMessage, limit: number) {
         scaledDuration(2200, scale),
       );
       break;
+    case "transformation":
+      await animate(
+        TRANSFORMATION_SKSL,
+        at,
+        [...common, { name: "radius", value: dpi * STYLES.transformation.reach * scale }],
+        scaledDuration(2600, scale),
+      );
+      break;
     case "nuage":
       await animate(
         CLOUD_SKSL,
@@ -495,6 +504,7 @@ function durableSpec(entry: DurableEntry, at: Point, dpi: number) {
   switch (style) {
     case "aura":
     case "dome":
+    case "transformation":
       return { sksl: DURABLE_SKSL[style], position: at, uniforms: [...common, radius] };
     case "cube":
       return {
@@ -856,6 +866,10 @@ async function placeDurable(
     owner: OBR.player.id,
   };
   await saveDurables([...entries, entry]);
+  // L'éclair et l'onde de choc du déclenchement : l'effet durable, lui, n'a ni début ni fin.
+  if (choice.style === "transformation") {
+    send(buildMessage(choice, carrier?.center ?? at, undefined, multiplier, entry.seed));
+  }
 }
 
 /** Sort lancé depuis la roue, le temps de viser, et l'outil à retrouver ensuite. */

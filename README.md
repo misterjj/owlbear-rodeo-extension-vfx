@@ -11,11 +11,11 @@ Le dernier choix est conservé.
 - **Élément :** feu, glace, foudre, poison, acide, ténèbres, lumière, force, nécrotique, psychique,
   tonnerre, physique, sang, eau, terre, vent ;
 - **Style :**
-  - coup, griffes, morsure, explosion, pluie, dôme, cube, nuage, aura et soin se lancent d'un clic sur la carte ;
+  - coup, griffes, morsure, explosion, pluie, dôme, cube, nuage, aura, transformation et soin se lancent d'un clic sur la carte ;
   - flèche, projectile, rayon, cône, mur et téléportation demandent deux clics : le point de départ,
     puis la cible ou la direction (`Échap` pour annuler) ;
   - chaîne part du lanceur, puis saute à chaque nouvelle cible cliquée (`Échap` pour finir) ;
-- **Taille :** XS, S, M, L ou XL. Pour un sort de zone (explosion, pluie, dôme, cube, nuage, aura, soin,
+- **Taille :** XS, S, M, L ou XL. Pour un sort de zone (explosion, pluie, dôme, cube, nuage, aura, transformation, soin,
   cône), un rayon, une longueur ou un côté exact se donne dans l'unité de la scène.
 
 Glisse la barre de titre du panneau pour le déplacer. Le bouton **–** le réduit à l'essentiel : l'effet
@@ -27,7 +27,7 @@ nom, dans ce navigateur ; reprendre un nom existant le remplace.
 
 ## Effets durables
 
-Aura, pluie, dôme, cube, nuage et mur peuvent durer : coche **Durable** dans le panneau. L'effet reste alors
+Aura, transformation, pluie, dôme, cube, nuage et mur peuvent durer : coche **Durable** dans le panneau. L'effet reste alors
 jusqu'à ce qu'on le retire, et se voit aussi pour ceux qui arrivent en cours de partie.
 
 - Un clic sur un token l'y attache : il le suit et disparaît avec lui. Un nouveau clic l'éteint.
@@ -67,7 +67,7 @@ sur le token avec le mode **Roue des sorts** de l'outil, ou choisis **Sorts** da
 et tu renommes les sorts directement dans leur champ. Le crayon ✎ modifie un sort : élément, style,
 taille, zone exacte et durée. Un effet durable déjà allumé ne change pas tant qu'il n'est pas éteint.
 
-Aura, soin, dôme et les sorts durables autres que le mur partent aussitôt du token. Les autres attendent un clic pour viser, puis tu
+Aura, transformation, soin, dôme et les sorts durables autres que le mur partent aussitôt du token. Les autres attendent un clic pour viser, puis tu
 retrouves l'outil que tu avais (`Échap` pour annuler). Les sorts sont enregistrés sur le token : ils
 le suivent et servent à tous ceux qui ont la main dessus.
 

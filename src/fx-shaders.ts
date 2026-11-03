@@ -708,12 +708,81 @@ half4 main(float2 coord) {
 }
 `;
 
+const transformation = (timing: Timing) => `${common(timing, 2.6)}
+uniform float radius;
+
+float gauss(float distance, float width) {
+  float offset = distance / width;
+  return exp(-offset * offset);
+}
+
+half4 main(float2 coord) {
+  vec2 p = local(coord) / radius;
+  float d = length(p);
+  if (d > 2.6) return half4(0.0);
+
+  float now = clock();
+  float grow = smoothstep(0.0, 0.16, life());
+  float fade = 1.0 - smoothstep(0.74, 1.0, life());
+  float breath = 0.94 + 0.06 * sin(now * 13.0 + seed);
+
+  // Silhouette de flamme : large à la base, étirée et effilée vers le haut de l'écran.
+  vec2 q = vec2(p.x, p.y + 0.38);
+  float up = clamp(-q.y / 1.7, 0.0, 1.0);
+  float tall = (q.y < 0.0 ? 1.7 : 0.82) * mix(0.35, 1.0, grow) * breath;
+  float shape = length(vec2(q.x / mix(1.08, 0.5, up), q.y / tall));
+
+  // Bruit étiré à la verticale qui file vers le haut : ce sont les langues de la flamme.
+  float streak = fbm(vec2(p.x * 3.4 + seed, p.y * 0.9 + now * 8.0));
+  float tongue = noise(vec2(p.x * 8.0 - seed, p.y * 1.3 + now * 15.0));
+  float edge = 1.0 - shape + (streak - 0.5) * (0.55 + up * 0.95) + (tongue - 0.5) * (0.12 + up * 0.5);
+  float flame = smoothstep(0.0, 0.3, edge);
+
+  // Le centre reste presque clair : l'effet passe au-dessus du token et ne doit pas le cacher.
+  float hollow = 0.1 + 0.9 * smoothstep(0.26, 0.7, d);
+  float body = flame * (0.5 + streak * 0.75) * hollow;
+  float heat = clamp(edge * 1.5 + (1.0 - smoothstep(0.35, 1.0, d)) * 0.55, 0.0, 1.0);
+
+  // Halo au sol, qui respire autour du personnage.
+  // Bruit lu sur le cercle plutôt que sur l'angle, qui ferait une coupure là où il saute de -π à π.
+  float rippled = fbm(vec2(p.x, p.y) / max(d, 0.001) * 1.8 + vec2(seed, now * 6.0));
+  float ground = gauss(d - 0.74 - 0.05 * sin(now * 9.0), 0.13) * (0.12 + rippled * 0.6) * grow;
+
+  // Étincelles arrachées par la montée de l'énergie.
+  float sparks = 0.0;
+  for (int i = 0; i < 18; i++) {
+    float index = float(i) + seed;
+    float x = (hash(vec2(index, 2.7)) - 0.5) * 1.8;
+    float phase = fract(now * (2.6 + hash(vec2(index, 4.1)) * 2.0) + hash(vec2(index, 7.9)));
+    vec2 spark = vec2(x + sin(phase * 7.0 + index) * 0.07, 0.45 - phase * 2.35);
+    vec2 offset = (p - spark) * vec2(1.0, 0.42);
+    sparks += exp(-dot(offset, offset) * 1500.0) * smoothstep(0.0, 0.12, phase) * (1.0 - smoothstep(0.6, 1.0, phase));
+  }
+  sparks *= grow;
+
+  // Déclenchement : éclair et onde de choc. Un effet durable, à mi-vie, n'en montre rien.
+  float burst = 1.0 - pow(1.0 - clamp(life() / 0.3, 0.0, 1.0), 3.0);
+  float shock = gauss(d - burst * 2.1, 0.07 + burst * 0.05) * (1.0 - smoothstep(0.12, 0.36, life()));
+  float flash = exp(-d * d * 1.8) * (1.0 - smoothstep(0.0, 0.14, life()));
+
+  float glow = clamp(ground + sparks + shock * 0.9 + flash, 0.0, 1.0);
+  float flameAlpha = clamp(body, 0.0, 1.0) * fade;
+  float glowAlpha = glow * fade;
+  vec3 color = ramp(heat) * flameAlpha;
+  float alpha = flameAlpha;
+  color = ramp(0.55 + glow * 0.45) * glowAlpha + color * (1.0 - glowAlpha);
+  alpha = glowAlpha + alpha * (1.0 - glowAlpha);
+  return half4(color, alpha);
+}
+`;
+
 export const RAIN_SKSL = rain(BRIEF);
 export const AURA_SKSL = aura(BRIEF);
 export const WALL_SKSL = wall(BRIEF);
 export const DOME_SKSL = dome(BRIEF);
 export const CUBE_SKSL = cube(BRIEF);
 export const CLOUD_SKSL = cloud(BRIEF);
+export const TRANSFORMATION_SKSL = transformation(BRIEF);
 
 /** Versions continues des styles qui peuvent durer. */
 export const DURABLE_SKSL = {
@@ -723,4 +792,5 @@ export const DURABLE_SKSL = {
   dome: dome(DURABLE),
   cube: cube(DURABLE),
   nuage: cloud(DURABLE),
+  transformation: transformation(DURABLE),
 };

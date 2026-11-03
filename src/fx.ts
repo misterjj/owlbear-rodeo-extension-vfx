@@ -258,6 +258,7 @@ export const STYLES = {
   cube: { label: "Cube", directed: false, reach: 4, exactZone: true },
   nuage: { label: "Nuage", directed: false, reach: 2.5, exactZone: true },
   aura: { label: "Aura", directed: false, reach: 1.5, exactZone: true },
+  transformation: { label: "Transformation", directed: false, reach: 1.2, exactZone: true },
   soin: { label: "Soin", directed: false, reach: 1, exactZone: true },
   teleportation: { label: "Téléportation", directed: true, reach: 0, exactZone: false },
 } as const;
@@ -635,7 +636,7 @@ export const defaultSpellName = ({ element, style }: FxCast) =>
 
 /** Ces styles partent du token sans qu'il y ait à viser. */
 export const castsOnSelf = (style: StyleId) =>
-  style === "aura" || style === "soin" || style === "dome";
+  style === "aura" || style === "soin" || style === "dome" || style === "transformation";
 
 export interface WheelCast {
   token: string;
@@ -657,7 +658,7 @@ export function wheelPositions(count: number, radius: number): Point[] {
   });
 }
 
-const DURABLE_STYLES: readonly StyleId[] = ["aura", "pluie", "dome", "cube", "mur", "nuage"];
+const DURABLE_STYLES: readonly StyleId[] = ["aura", "pluie", "dome", "cube", "mur", "nuage", "transformation"];
 
 export const canBeDurable = (style: StyleId) => DURABLE_STYLES.includes(style);
 

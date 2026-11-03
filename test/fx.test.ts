@@ -275,7 +275,7 @@ describe("réglages", () => {
   });
 
   it("propose tous les styles, et demande un lanceur seulement à ceux qui partent d'un point", () => {
-    expect(STYLE_IDS).toHaveLength(17);
+    expect(STYLE_IDS).toHaveLength(18);
     expect(STYLE_IDS.filter((id) => STYLES[id].directed)).toEqual([
       "fleche",
       "projectile",
@@ -309,7 +309,7 @@ describe("géométrie", () => {
 
   it("place tous les effets avec le repère fourni par Owlbear", () => {
     const sources = Object.values(shaders).filter((value) => typeof value === "string");
-    expect(sources).toHaveLength(15);
+    expect(sources).toHaveLength(16);
     for (const sksl of sources) {
       expect(sksl).toContain("uniform mat3 model;");
       expect(sksl).toContain("uniform float t;");
@@ -434,7 +434,7 @@ describe("sorts d'un token", () => {
   });
 
   it("ne fait viser que les effets qui ne partent pas du token lui-même", () => {
-    for (const style of ["aura", "soin", "dome"] as const) expect(castsOnSelf(style)).toBe(true);
+    for (const style of ["aura", "soin", "dome", "transformation"] as const) expect(castsOnSelf(style)).toBe(true);
     for (const style of ["explosion", "coup", "rayon"] as const) expect(castsOnSelf(style)).toBe(false);
   });
 
