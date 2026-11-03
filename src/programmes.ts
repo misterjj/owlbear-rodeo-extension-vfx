@@ -5,6 +5,7 @@ import {
   SIZE_IDS,
   STYLES,
   STYLE_IDS,
+  exactZoneLabel,
   isExact,
   type ElementId,
   type SizeId,
@@ -339,7 +340,7 @@ function renderForm() {
         <label>Élément<select id="element">${options(ELEMENT_IDS, (id) => ELEMENTS[id].label, d.element)}</select></label>
         <label>Style<select id="style">${options(STYLE_IDS, (id) => STYLES[id].label, d.style)}</select></label>
         <label>Taille<select id="size">${options(SIZE_IDS, (id) => id, d.size)}</select></label>
-        ${zone ? `<label>${d.style === "cone" ? "Longueur" : "Rayon"} exact (${escapeHtml(unit)})<input id="exact" type="number" min="0" step="any" value="${d.exact ?? ""}" /></label>` : ""}
+        ${zone ? `<label>${exactZoneLabel(d.style)} exact (${escapeHtml(unit)})<input id="exact" type="number" min="0" step="any" value="${d.exact ?? ""}" /></label>` : ""}
       </div>
       <h2>Rythme</h2>
       <div class="fields">

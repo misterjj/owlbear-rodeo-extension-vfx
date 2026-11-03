@@ -76,6 +76,7 @@ import {
   BITE_SKSL,
   CLOUD_SKSL,
   CONE_SKSL,
+  CUBE_SKSL,
   DOME_SKSL,
   DURABLE_SKSL,
   EXPLOSION_SKSL,
@@ -342,6 +343,14 @@ async function play(message: FxMessage, limit: number) {
         scaledDuration(3000, scale),
       );
       break;
+    case "cube":
+      await animate(
+        CUBE_SKSL,
+        at,
+        [...common, { name: "radius", value: (dpi * STYLES.cube.reach * scale) / 2 }],
+        scaledDuration(3000, scale),
+      );
+      break;
     case "aura":
       await animate(
         AURA_SKSL,
@@ -483,6 +492,12 @@ function durableSpec(entry: DurableEntry, at: Point, dpi: number) {
     case "aura":
     case "dome":
       return { sksl: DURABLE_SKSL[style], position: at, uniforms: [...common, radius] };
+    case "cube":
+      return {
+        sksl: DURABLE_SKSL.cube,
+        position: at,
+        uniforms: [...common, { ...radius, value: radius.value / 2 }],
+      };
     case "pluie":
       return {
         sksl: DURABLE_SKSL.pluie,

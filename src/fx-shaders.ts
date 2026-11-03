@@ -642,6 +642,48 @@ half4 main(float2 coord) {
 }
 `;
 
+const cube = (timing: Timing) => `${common(timing, 3)}
+uniform float radius;
+
+float line(float distance, float width) {
+  float offset = distance / width;
+  return exp(-offset * offset);
+}
+
+half4 main(float2 coord) {
+  // radius est ici la moitié du côté : la zone couvre exactement ce carré.
+  vec2 p = local(coord) / radius;
+  vec2 a = abs(p);
+  if (max(a.x, a.y) > 1.15) return half4(0.0);
+
+  // Le cube se déploie depuis son centre, tient, puis se referme.
+  float open = 1.0 - pow(1.0 - clamp(life() / 0.22, 0.0, 1.0), 3.0);
+  float close = smoothstep(0.82, 1.0, life());
+  float size = max(open * (1.0 - close * 0.25), 0.001);
+  a /= size;
+  float d = max(a.x, a.y);
+  if (d > 1.06) return half4(0.0);
+
+  // Vu de dessus : le bord au sol, la face du haut, et les arêtes qui les relient.
+  float ground = pow(clamp(d, 0.0, 1.0), 7.0);
+  float topEdge = line(d - 0.62, 0.016);
+  float side = smoothstep(0.62, 0.68, d) * line(a.x - a.y, 0.018);
+  float n = fbm(p * 4.0 + vec2(seed, clock() * 3.0));
+  float veil = 0.11 + smoothstep(0.42, 0.72, n) * 0.2;
+  if (d < 0.62) veil += 0.05;
+
+  // Vague qui parcourt le cube à l'ouverture.
+  float wave = line(d - clamp(life() / 0.35, 0.0, 1.0), 0.09) * (1.0 - smoothstep(0.2, 0.4, life())) * 0.6;
+
+  float edge = 1.0 - smoothstep(1.0, 1.06, d);
+  float fade = 1.0 - close;
+  float lines = max(topEdge, side) * 0.75;
+  float heat = clamp(ground + lines + wave, 0.0, 1.0);
+  float alpha = clamp(ground * 0.95 + lines + veil + wave, 0.0, 1.0) * edge * fade;
+  return half4(ramp(0.3 + heat * 0.7) * alpha, alpha);
+}
+`;
+
 const cloud = (timing: Timing) => `${common(timing, 4)}
 uniform vec3 smoke;
 uniform float radius;
@@ -670,6 +712,7 @@ export const RAIN_SKSL = rain(BRIEF);
 export const AURA_SKSL = aura(BRIEF);
 export const WALL_SKSL = wall(BRIEF);
 export const DOME_SKSL = dome(BRIEF);
+export const CUBE_SKSL = cube(BRIEF);
 export const CLOUD_SKSL = cloud(BRIEF);
 
 /** Versions continues des styles qui peuvent durer. */
@@ -678,5 +721,6 @@ export const DURABLE_SKSL = {
   aura: aura(DURABLE),
   mur: wall(DURABLE),
   dome: dome(DURABLE),
+  cube: cube(DURABLE),
   nuage: cloud(DURABLE),
 };

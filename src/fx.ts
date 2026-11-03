@@ -239,7 +239,7 @@ export const ELEMENTS = {
 
 /**
  * `directed` : l'effet part d'un lanceur et demande donc deux clics.
- * `reach` : rayon ou longueur en cases à la taille M, 0 si les clics décident de la longueur.
+ * `reach` : rayon, longueur ou côté en cases à la taille M, 0 si les clics décident de la longueur.
  * `exactZone` : la zone peut être donnée dans l'unité de la scène, comme dans la description d'un sort.
  */
 export const STYLES = {
@@ -255,6 +255,7 @@ export const STYLES = {
   pluie: { label: "Pluie", directed: false, reach: 3, exactZone: true },
   mur: { label: "Mur", directed: true, reach: 0, exactZone: false },
   dome: { label: "Dôme", directed: false, reach: 2.5, exactZone: true },
+  cube: { label: "Cube", directed: false, reach: 4, exactZone: true },
   nuage: { label: "Nuage", directed: false, reach: 2.5, exactZone: true },
   aura: { label: "Aura", directed: false, reach: 1.5, exactZone: true },
   soin: { label: "Soin", directed: false, reach: 1, exactZone: true },
@@ -285,7 +286,7 @@ export interface FxCast {
 }
 
 export interface FxChoice extends FxCast {
-  /** Rayon ou longueur dans l'unité de la scène ; remplace la taille pour les styles de zone. */
+  /** Rayon, longueur ou côté dans l'unité de la scène ; remplace la taille pour les styles de zone. */
   exact: number | null;
   /** Seuls les MJ voient l'effet. */
   gmOnly: boolean;
@@ -299,7 +300,7 @@ export interface FxMessage extends FxCast {
   /** Présent seulement pour les effets qui partent d'un lanceur. */
   from?: Point;
   seed: number;
-  /** Rayon ou longueur en cases, quand une zone exacte a été demandée. */
+  /** Rayon, longueur ou côté en cases, quand une zone exacte a été demandée. */
   cells?: number;
   gmOnly?: true;
 }
@@ -545,12 +546,24 @@ export interface Outline {
 const CONE_HALF_ANGLE = Math.atan(0.5);
 
 /** Contour montré sous le pointeur avant de lancer, ou rien si le lanceur manque encore. */
+/** Ce que mesure la zone exacte de ce style, tel qu'une description de sort l'indique. */
+export const exactZoneLabel = (style: StyleId) =>
+  style === "cone" ? "Longueur" : style === "cube" ? "Côté" : "Rayon";
+
 export function previewOutline(
   style: StyleId,
   source: Point | undefined,
   pointer: Point,
   reach: number,
 ): Outline | undefined {
+  if (style === "cube") {
+    const half = reach / 2;
+    const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    return {
+      points: corners.map(([x, y]) => ({ x: pointer.x + x * half, y: pointer.y + y * half })),
+      closed: true,
+    };
+  }
   if (!STYLES[style].directed) {
     const points = Array.from({ length: 48 }, (_, i) => {
       const angle = (i / 48) * Math.PI * 2;
@@ -622,7 +635,7 @@ export function wheelPositions(count: number, radius: number): Point[] {
   });
 }
 
-const DURABLE_STYLES: readonly StyleId[] = ["aura", "pluie", "dome", "mur", "nuage"];
+const DURABLE_STYLES: readonly StyleId[] = ["aura", "pluie", "dome", "cube", "mur", "nuage"];
 
 export const canBeDurable = (style: StyleId) => DURABLE_STYLES.includes(style);
 

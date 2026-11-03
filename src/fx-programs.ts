@@ -46,7 +46,7 @@ export interface Program extends FxCast, Timing {
   name: string;
   /** Nom du groupe, vide s'il n'en a pas. */
   group: string;
-  /** Rayon ou longueur dans l'unité de la scène, pour les styles de zone. */
+  /** Rayon, longueur ou côté dans l'unité de la scène, pour les styles de zone. */
   exact: number | null;
   anchors: Anchor[];
   active: boolean;

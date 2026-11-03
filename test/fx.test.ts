@@ -45,6 +45,7 @@ import {
   scaledDuration,
   teleportTiming,
   tokenAt,
+  exactZoneLabel,
 } from "../src/fx";
 import * as shaders from "../src/fx-shaders";
 
@@ -273,7 +274,7 @@ describe("réglages", () => {
   });
 
   it("propose tous les styles, et demande un lanceur seulement à ceux qui partent d'un point", () => {
-    expect(STYLE_IDS).toHaveLength(16);
+    expect(STYLE_IDS).toHaveLength(17);
     expect(STYLE_IDS.filter((id) => STYLES[id].directed)).toEqual([
       "fleche",
       "projectile",
@@ -307,7 +308,7 @@ describe("géométrie", () => {
 
   it("place tous les effets avec le repère fourni par Owlbear", () => {
     const sources = Object.values(shaders).filter((value) => typeof value === "string");
-    expect(sources).toHaveLength(14);
+    expect(sources).toHaveLength(15);
     for (const sksl of sources) {
       expect(sksl).toContain("uniform mat3 model;");
       expect(sksl).toContain("uniform float t;");
@@ -533,5 +534,36 @@ describe("manifest", () => {
   it("respecte la limite de description d'Owlbear", () => {
     const manifest = JSON.parse(readFileSync("public/manifest.json", "utf8"));
     expect(manifest.description.length).toBeLessThanOrEqual(128);
+  });
+});
+
+describe("cube", () => {
+  it("couvre un carré dont le côté est la zone demandée", () => {
+    const outline = previewOutline("cube", undefined, { x: 100, y: 200 }, 60);
+    expect(outline).toEqual({
+      closed: true,
+      points: [
+        { x: 70, y: 170 },
+        { x: 130, y: 170 },
+        { x: 130, y: 230 },
+        { x: 70, y: 230 },
+      ],
+    });
+  });
+
+  it("nomme sa zone exacte par son côté", () => {
+    expect(exactZoneLabel("cube")).toBe("Côté");
+    expect(exactZoneLabel("cone")).toBe("Longueur");
+    expect(exactZoneLabel("dome")).toBe("Rayon");
+  });
+
+  it("prend le côté demandé en cases", () => {
+    const cells = 6;
+    expect(effectScale("cube", "M", cells) * STYLES.cube.reach).toBe(cells);
+  });
+
+  it("peut durer, sans partir tout seul du token", () => {
+    expect(canBeDurable("cube")).toBe(true);
+    expect(castsOnSelf("cube")).toBe(false);
   });
 });

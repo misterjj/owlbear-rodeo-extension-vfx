@@ -13,6 +13,7 @@ import {
   addFavorite,
   canBeDurable,
   durablesIn,
+  exactZoneLabel,
   isDurable,
   loadChoice,
   loadFavorites,
@@ -95,7 +96,7 @@ function favoritesSection() {
 
 function exactRow() {
   if (!STYLES[choice.style].exactZone) return "";
-  const what = choice.style === "cone" ? "Longueur" : "Rayon";
+  const what = exactZoneLabel(choice.style);
   return `
     <label class="exact">
       ${what} exact
