@@ -19,6 +19,7 @@ import {
   isDurable,
   sameDurable,
   defaultSpellName,
+  editSpell,
   parseWheelCast,
   renameSpell,
   spellsOf,
@@ -397,6 +398,35 @@ describe("sorts d'un token", () => {
     expect(renameSpell(list, 0, "   ")).toBe(list);
     expect(renameSpell(list, 0, "MORSURE")).toBe(list);
     expect(renameSpell(list, 0, "x".repeat(50))[0].name).toHaveLength(30);
+  });
+
+  it("modifie un sort sans toucher aux autres", () => {
+    const other = { ...spell, name: "Morsure" };
+    const list = [spell, other];
+    const next = editSpell(list, 0, { name: " Boule ", element: "feu", style: "explosion", size: "L", exact: 6 });
+    expect(next[0]).toEqual({ name: "Boule", element: "feu", style: "explosion", size: "L", exact: 6 });
+    expect(next[1]).toBe(other);
+    expect(list[0]).toBe(spell);
+  });
+
+  it("refuse un nom vide ou déjà pris lors d'une modification", () => {
+    const list = [spell, { ...spell, name: "Morsure" }];
+    expect(editSpell(list, 0, { ...spell, name: "  " })).toBe(list);
+    expect(editSpell(list, 0, { ...spell, name: "morsure" })).toBe(list);
+    expect(editSpell(list, 0, { ...spell, size: "XL" })[0].size).toBe("XL");
+  });
+
+  it("oublie ce que le nouveau style ne permet pas", () => {
+    const zone: Favorite = { name: "Dôme", element: "feu", style: "dome", size: "M", exact: 6, durable: true };
+    const kept = editSpell([zone], 0, zone)[0];
+    expect(kept.exact).toBe(6);
+    expect(kept.durable).toBe(true);
+    const changed = editSpell([zone], 0, { ...zone, style: "griffes" })[0];
+    expect(changed.exact).toBeNull();
+    expect("durable" in changed).toBe(false);
+    expect(editSpell([zone], 0, { ...zone, exact: Number.NaN })[0].exact).toBeNull();
+    expect(editSpell([zone], 0, { ...zone, exact: 0 })[0].exact).toBeNull();
+    expect("durable" in editSpell([zone], 0, { ...zone, durable: false })[0]).toBe(false);
   });
 
   it("nomme un sort d'après son style et son élément", () => {

@@ -611,6 +611,25 @@ export function renameSpell(spells: Favorite[], index: number, name: string): Fa
   return spells.map((spell, i) => (i === index ? { ...spell, name: trimmed } : spell));
 }
 
+/** Remplace les réglages d'un sort. Une zone exacte ou « durable » que le style ne permet pas est oubliée. */
+export function editSpell(spells: Favorite[], index: number, changes: Favorite): Favorite[] {
+  const renamed = renameSpell(spells, index, changes.name);
+  if (renamed === spells) return spells;
+  const { element, style, size, exact } = changes;
+  return renamed.map((spell, i) =>
+    i === index
+      ? {
+          name: spell.name,
+          element,
+          style,
+          size,
+          exact: STYLES[style].exactZone && isExact(exact) ? exact : null,
+          ...(isDurable(changes) ? { durable: true } : {}),
+        }
+      : spell,
+  );
+}
+
 export const defaultSpellName = ({ element, style }: FxCast) =>
   `${STYLES[style].label} · ${ELEMENTS[element].label}`;
 

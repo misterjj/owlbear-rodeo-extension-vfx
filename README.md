@@ -64,7 +64,8 @@ la main restent prioritaires.
 Chaque token peut garder jusqu'à 8 sorts, présentés sur une roue autour de lui. Pour l'ouvrir, clique
 sur le token avec le mode **Roue des sorts** de l'outil, ou choisis **Sorts** dans son menu. Le bouton
 ⚙ au centre gère la liste : tu y ajoutes le réglage en cours sous le nom de ton choix ou un favori,
-et tu renommes les sorts directement dans leur champ.
+et tu renommes les sorts directement dans leur champ. Le crayon ✎ modifie un sort : élément, style,
+taille, zone exacte et durée. Un effet durable déjà allumé ne change pas tant qu'il n'est pas éteint.
 
 Aura, soin, dôme et les sorts durables autres que le mur partent aussitôt du token. Les autres attendent un clic pour viser, puis tu
 retrouves l'outil que tu avais (`Échap` pour annuler). Les sorts sont enregistrés sur le token : ils

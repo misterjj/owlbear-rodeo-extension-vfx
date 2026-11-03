@@ -1,15 +1,21 @@
 import OBR from "@owlbear-rodeo/sdk";
 import {
   ELEMENTS,
+  ELEMENT_IDS,
   FX_SPELLS_KEY,
   FX_WHEEL_CHANNEL,
   FX_WHEEL_ID,
   MAX_NAME_LENGTH,
   MAX_SPELLS,
+  SIZE_IDS,
   STYLES,
+  STYLE_IDS,
   addFavorite,
+  canBeDurable,
   defaultSpellName,
   durablesIn,
+  editSpell,
+  exactZoneLabel,
   isDurable,
   loadChoice,
   loadFavorites,
@@ -18,8 +24,11 @@ import {
   spellsOf,
   wheelPositions,
   type DurableEntry,
+  type ElementId,
   type Favorite,
   type Rgb,
+  type SizeId,
+  type StyleId,
 } from "./fx";
 import "./wheel.css";
 
@@ -27,6 +36,7 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 const tokenId = new URLSearchParams(location.search).get("token") ?? "";
 let spells: Favorite[] = [];
 let tokenName = "";
+let unit = "cases";
 /** Effets durables allumés sur ce token. */
 let lit: DurableEntry[] = [];
 
@@ -119,6 +129,7 @@ function renderManage() {
                     <div class="row">
                       <input type="text" data-name="${index}" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(spell.name)}" aria-label="Nom du sort ${escapeHtml(spell.name)}" />
                       <small>${STYLES[spell.style].label}${isDurable(spell) ? ", durable" : ""}</small>
+                      <button type="button" data-edit="${index}" aria-label="Modifier ${escapeHtml(spell.name)}" title="Modifier">✎</button>
                       <button type="button" data-remove="${index}" aria-label="Retirer ${escapeHtml(spell.name)}" title="Retirer">✕</button>
                     </div>`,
                 )
@@ -155,6 +166,9 @@ function renderManage() {
     saveSpells(next)
       .then(renderManage)
       .catch((error) => console.warn("Effets :", error));
+  app.querySelectorAll<HTMLButtonElement>("[data-edit]").forEach((element) => {
+    element.onclick = () => renderEdit(Number(element.dataset.edit));
+  });
   app.querySelectorAll<HTMLButtonElement>("[data-remove]").forEach((element) => {
     element.onclick = () =>
       refresh(spells.filter((_, index) => index !== Number(element.dataset.remove)));
@@ -194,12 +208,92 @@ function renderManage() {
   });
 }
 
+function options<T extends string>(ids: readonly T[], label: (id: T) => string, selected: T) {
+  return ids
+    .map((id) => `<option value="${id}"${id === selected ? " selected" : ""}>${escapeHtml(label(id))}</option>`)
+    .join("");
+}
+
+function renderEdit(index: number) {
+  const spell = spells[index];
+  app.innerHTML = `
+    <div class="card" id="card">
+      <header class="bar">
+        <strong>Modifier le sort</strong>
+        <button type="button" id="back">Retour</button>
+      </header>
+      <form id="edit" class="edit" novalidate>
+        <label class="wide">Nom<input type="text" id="name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(spell.name)}" /></label>
+        <label>Élément<select id="element">${options(ELEMENT_IDS, (id) => ELEMENTS[id].label, spell.element)}</select></label>
+        <label>Style<select id="style">${options(STYLE_IDS, (id) => STYLES[id].label, spell.style)}</select></label>
+        <label>Taille<select id="size">${options(SIZE_IDS, (id) => id, spell.size)}</select></label>
+        <label id="exact-row"><span id="exact-label"></span><input type="number" id="exact" min="0" step="any" value="${spell.exact ?? ""}" /></label>
+        <label class="wide check" id="durable-row"><input type="checkbox" id="durable"${spell.durable ? " checked" : ""} /> Durable</label>
+        ${isLit(spell) ? `<p class="note wide">Déjà allumé : l'effet en cours ne change pas. Éteins-le, au besoin depuis le panneau, pour voir la nouvelle version.</p>` : ""}
+        <p class="error wide" id="error" hidden></p>
+        <button type="submit" class="wide save">Enregistrer</button>
+      </form>
+    </div>`;
+
+  const form = app.querySelector<HTMLFormElement>("#edit")!;
+  const field = <T extends HTMLElement>(id: string) => form.querySelector<T>(`#${id}`)!;
+  const styleField = field<HTMLSelectElement>("style");
+  const error = field<HTMLParagraphElement>("error");
+  const back = () => renderManage();
+
+  // Les champs masqués gardent leur valeur : revenir au style d'avant ne la perd pas.
+  const showFieldsOfStyle = () => {
+    const style = styleField.value as StyleId;
+    field("exact-row").hidden = !STYLES[style].exactZone;
+    field("exact-label").textContent = `${exactZoneLabel(style)} exact (${unit})`;
+    field("durable-row").hidden = !canBeDurable(style);
+  };
+  showFieldsOfStyle();
+  styleField.onchange = showFieldsOfStyle;
+
+  app.querySelector<HTMLDivElement>("#card")!.onclick = (event) => event.stopPropagation();
+  app.querySelector<HTMLButtonElement>("#back")!.onclick = back;
+  form.onkeydown = (event) => {
+    if (event.key === "Escape") back();
+  };
+  form.oninput = () => {
+    error.hidden = true;
+  };
+  form.onsubmit = (event) => {
+    event.preventDefault();
+    const next = editSpell(spells, index, {
+      name: field<HTMLInputElement>("name").value,
+      element: field<HTMLSelectElement>("element").value as ElementId,
+      style: styleField.value as StyleId,
+      size: field<HTMLSelectElement>("size").value as SizeId,
+      exact: field<HTMLInputElement>("exact").valueAsNumber,
+      durable: field<HTMLInputElement>("durable").checked,
+    });
+    const fail = (message: string) => {
+      error.textContent = message;
+      error.hidden = false;
+    };
+    if (next === spells) {
+      fail("Ce nom est vide ou déjà pris par un autre sort.");
+      return;
+    }
+    saveSpells(next)
+      .then(back)
+      .catch((reason) => {
+        console.warn("Effets :", reason);
+        fail("Enregistrement impossible.");
+      });
+  };
+  field<HTMLInputElement>("name").focus();
+}
+
 OBR.onReady(async () => {
   const [item] = await OBR.scene.items.getItems([tokenId]);
   if (!item) {
     await close();
     return;
   }
+  unit = (await OBR.scene.grid.getScale()).parsed.unit || unit;
   tokenName = item.name;
   spells = spellsOf(item.metadata);
   lit = durablesIn(await OBR.scene.getMetadata()).filter(({ carrier }) => carrier?.id === tokenId);
