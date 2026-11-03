@@ -49,7 +49,9 @@ que soit l'outil en main, et la fenêtre reste ouverte quand tu changes d'outil.
 - **Effet :** élément, style, taille ou zone exacte.
 - **Rythme :** intervalle minimum et maximum, décalage du premier tir, nombre de tirs (vide : sans fin).
 - **Points :** des positions sur la carte ou des tokens, placés d'un clic. Un effet dirigé va du premier
-  au second ; avec plus de deux points, ou pour un effet de zone, le point est tiré au hasard.
+  au second ; avec plus de deux points, ou pour un effet de zone, le point est tiré au hasard. Une
+  **chaîne** parcourt au contraire tous ses points dans l'ordre : c'est un seul tir, et l'intervalle
+  compte à partir de sa fin. Un token caché ou supprimé est sauté.
 - **Groupes :** ils s'activent ou se désactivent d'un coup. Les programmes activés ensemble partagent le
   même départ, ce qui permet de les faire alterner avec le décalage.
 

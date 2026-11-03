@@ -1,10 +1,12 @@
 import {
+  CHAIN_HOP_MS,
   ELEMENTS,
   SIZES,
   STYLES,
   isExact,
   isKeyOf,
   isPoint,
+  scaledDuration,
   type FxCast,
   type Point,
   type StyleId,
@@ -154,12 +156,26 @@ export const firstShot = (program: Program): Shot => ({
   time: program.startedAt + program.offset * 1000,
 });
 
+/** Le saut suivant part avant la fin du précédent : la chaîne se lit d'un seul trait. */
+const CHAIN_HOP_OVERLAP = 0.6;
+
+/** Attente entre le départ de deux sauts d'une chaîne. */
+export const chainHopDelay = ({ size }: Pick<Program, "size">) =>
+  scaledDuration(CHAIN_HOP_MS, SIZES[size]) * CHAIN_HOP_OVERLAP;
+
+/** Temps qu'occupe un tir avant que l'intervalle ne commence : seule une chaîne en a besoin. */
+export function shotDuration(program: Pick<Program, "style" | "size" | "anchors">) {
+  if (program.style !== "chaine") return 0;
+  const hops = Math.max(program.anchors.length - 1, 1);
+  return (hops - 1) * chainHopDelay(program) + scaledDuration(CHAIN_HOP_MS, SIZES[program.size]);
+}
+
 /** Tir suivant, ou rien quand la série est terminée. */
 export function nextShot(program: Program, { index, time }: Shot): Shot | undefined {
   const next = index + 1;
   if (program.shots !== null && next >= program.shots) return undefined;
   const wait = program.min + shotRandom(program, index, 0) * (program.max - program.min);
-  return { index: next, time: time + wait * 1000 };
+  return { index: next, time: time + shotDuration(program) + wait * 1000 };
 }
 
 /** Premier tir encore à venir à cet instant, pour un joueur qui arrive en cours de programme. */
@@ -170,8 +186,20 @@ export function shotAfter(program: Program, now: number): Shot | undefined {
 }
 
 /**
+ * Sauts d'une chaîne, dans l'ordre où ses points ont été placés. Un point absent (`undefined`) est
+ * sauté, et deux points confondus à la suite ne font pas de saut.
+ */
+export function chainHops(points: (Point | undefined)[]) {
+  const kept = points.filter((point): point is Point => point !== undefined);
+  const path = kept.filter(
+    (point, index) => index === 0 || point.x !== kept[index - 1].x || point.y !== kept[index - 1].y,
+  );
+  return path.slice(1).map((at, index) => ({ from: path[index], at }));
+}
+
+/**
  * Points d'appui d'un tir. Avec deux points, un effet dirigé va toujours du premier au second.
- * Avec plus de points, il relie deux d'entre eux au hasard.
+ * Avec plus de points, il relie deux d'entre eux au hasard. Une chaîne passe par `chainHops`.
  */
 export function shotAnchors(program: Program, index: number): { at: Anchor; from?: Anchor } | undefined {
   const { anchors, style } = program;

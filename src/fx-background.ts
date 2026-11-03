@@ -46,6 +46,7 @@ import {
   teleportTiming,
   tokenAt,
   type ElementId,
+  CHAIN_HOP_MS,
   type DurableEntry,
   type Favorite,
   type FxChoice,
@@ -59,7 +60,10 @@ import {
   FX_PROGRAM_CHANNEL,
   markedAnchors,
   nextShot,
+  chainHopDelay,
+  chainHops,
   programsIn,
+  shotDuration,
   shotAfter,
   shotAnchors,
   shotRandom,
@@ -304,9 +308,9 @@ async function play(message: FxMessage, limit: number) {
             { name: "width", value: dpi * 0.1 * scale },
             { name: "jag", value: Math.max(look.jag, 0.8) },
           ],
-          scaledDuration(600, scale),
+          scaledDuration(CHAIN_HOP_MS, scale),
         ),
-        explosion(at, dpi * 0.6 * scale, element, seed, unit, scaledDuration(600, scale)),
+        explosion(at, dpi * 0.6 * scale, element, seed, unit, scaledDuration(CHAIN_HOP_MS, scale)),
       ]);
       break;
     case "cone":
@@ -609,7 +613,10 @@ async function reconcileDurables() {
 
 let programs: Program[] = [];
 let programTimer: ReturnType<typeof setInterval> | undefined;
-const programClocks = new Map<string, { startedAt: number; shot: Shot | undefined }>();
+const programClocks = new Map<
+  string,
+  { startedAt: number; shot: Shot | undefined; busyUntil: number }
+>();
 /** Points du programme en cours d'édition dans la fenêtre du MJ. */
 let draftAnchors: Anchor[] = [];
 let markerSignature = "";
@@ -633,14 +640,18 @@ function runPrograms() {
     let clock = programClocks.get(program.id);
     if (!clock || clock.startedAt !== program.startedAt) {
       // On repart un peu en arrière : le premier tir d'un programme tout juste activé est déjà échu.
-      clock = { startedAt: program.startedAt, shot: shotAfter(program, now - STALE_SHOT_MS) };
+      clock = { startedAt: program.startedAt, shot: shotAfter(program, now - STALE_SHOT_MS), busyUntil: 0 };
       programClocks.set(program.id, clock);
     }
     while (clock.shot && clock.shot.time <= now) {
-      if (now - clock.shot.time < STALE_SHOT_MS) fireProgram(program, clock.shot.index).catch(warn);
+      if (now - clock.shot.time < STALE_SHOT_MS) {
+        clock.busyUntil = clock.shot.time + shotDuration(program);
+        fireProgram(program, clock.shot.index).catch(warn);
+      }
       clock.shot = nextShot(program, clock.shot);
     }
-    if (!clock.shot) finishProgram(program);
+    // La dernière chaîne va jusqu'au bout avant que la série ne soit déclarée finie.
+    if (!clock.shot && now >= clock.busyUntil) finishProgram(program);
   }
 }
 
@@ -664,8 +675,36 @@ function finishProgram({ id, startedAt }: Program) {
     .catch(warn);
 }
 
+const stillRunning = ({ id, startedAt }: Program) =>
+  programs.some((program) => program.id === id && program.active && program.startedAt === startedAt);
+
+/** Parcourt tous les points à la suite. Une chaîne commencée va au bout, tant qu'elle reste active. */
+async function fireChain(program: Program, index: number) {
+  if (active >= MAX_ACTIVE_FROM_PROGRAMS) return;
+  const areas = await loadTokenAreas();
+  const hops = chainHops(
+    program.anchors.map(({ at, token }) =>
+      token ? areas.find(({ id }) => id === token.id)?.center : at,
+    ),
+  );
+  const multiplier = await cellValue();
+  const choice = { ...program, gmOnly: false, durable: false };
+  for (const [hop, { from, at }] of hops.entries()) {
+    if (hop > 0) {
+      await new Promise((resolve) => setTimeout(resolve, chainHopDelay(program)));
+      if (!stillRunning(program)) return;
+    }
+    const seed = shotRandom(program, index, 3 + hop) * 100;
+    play(buildMessage(choice, at, from, multiplier, seed), MAX_ACTIVE).catch(warn);
+  }
+}
+
 /** Chaque joueur calcule le même tir de son côté : aucun message n'est échangé. */
 async function fireProgram(program: Program, index: number) {
+  if (program.style === "chaine") {
+    await fireChain(program, index);
+    return;
+  }
   const anchors = shotAnchors(program, index);
   if (!anchors) return;
   const areas = await loadTokenAreas();

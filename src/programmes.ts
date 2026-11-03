@@ -290,7 +290,9 @@ function anchorsHtml() {
     )
     .join("");
   const directed = STYLES[style].directed;
-  const note = directed
+  const note = style === "chaine"
+    ? "À chaque tir, la chaîne parcourt tous les points dans l'ordre. L'intervalle compte à partir de sa fin."
+    : directed
     ? "Avec deux points, l'effet va du premier au second. Avec plus, il relie deux points au hasard."
     : "Avec plusieurs points, chaque tir en choisit un au hasard.";
   return `

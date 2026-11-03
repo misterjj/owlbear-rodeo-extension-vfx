@@ -3,6 +3,8 @@ import {
   MAX_ANCHORS,
   MAX_PROGRAMS,
   MIN_INTERVAL,
+  chainHopDelay,
+  chainHops,
   firstShot,
   groupNames,
   markedAnchors,
@@ -12,6 +14,7 @@ import {
   programsIn,
   shotAfter,
   shotAnchors,
+  shotDuration,
   shotRandom,
   withActive,
   withProgram,
@@ -183,6 +186,64 @@ describe("points d'un tir", () => {
 
   it("ne tire pas sans assez de points", () => {
     expect(shotAnchors({ ...base, anchors: [point(0)] }, 0)).toBeUndefined();
+  });
+});
+
+describe("chaîne", () => {
+  const chain: Program = { ...base, style: "chaine", anchors: [point(0), point(1), point(2), point(3)] };
+
+  it("relie tous les points dans l'ordre", () => {
+    expect(chainHops(chain.anchors.map(({ at }) => at))).toEqual([
+      { from: { x: 0, y: 0 }, at: { x: 1, y: 0 } },
+      { from: { x: 1, y: 0 }, at: { x: 2, y: 0 } },
+      { from: { x: 2, y: 0 }, at: { x: 3, y: 0 } },
+    ]);
+  });
+
+  it("saute un point absent et reprend au suivant", () => {
+    expect(chainHops([{ x: 0, y: 0 }, undefined, { x: 2, y: 0 }])).toEqual([
+      { from: { x: 0, y: 0 }, at: { x: 2, y: 0 } },
+    ]);
+    expect(chainHops([undefined, { x: 2, y: 0 }])).toEqual([]);
+  });
+
+  it("ne saute pas d'un point sur lui-même, mais peut revenir à son départ", () => {
+    const a = { x: 0, y: 0 };
+    const b = { x: 1, y: 0 };
+    expect(chainHops([a, { ...a }, b, a])).toEqual([
+      { from: a, at: b },
+      { from: b, at: a },
+    ]);
+  });
+
+  it("attend la fin de la chaîne avant de compter l'intervalle", () => {
+    const first = firstShot(chain);
+    const end = first.time + shotDuration(chain);
+    expect(shotDuration(chain)).toBe(2 * chainHopDelay(chain) + 600);
+    expect(nextShot(chain, first)).toEqual({ index: 1, time: end + 3000 });
+  });
+
+  it("dure plus longtemps avec plus de points", () => {
+    const longer = { ...chain, anchors: [...chain.anchors, point(4)] };
+    expect(shotDuration(longer)).toBeGreaterThan(shotDuration(chain));
+  });
+
+  it("ne change pas le rythme des autres styles", () => {
+    expect(shotDuration(base)).toBe(0);
+    expect(nextShot(base, firstShot(base))).toEqual({ index: 1, time: 4000 });
+  });
+
+  it("garde le même calendrier pour un joueur qui arrive en cours de route", () => {
+    let shot = firstShot(chain);
+    for (let i = 0; i < 20; i++) shot = nextShot(chain, shot)!;
+    expect(shotAfter(chain, shot.time - 1)).toEqual(shot);
+  });
+
+  it("compte une chaîne complète pour un seul tir", () => {
+    const series = { ...chain, shots: 2 };
+    const second = nextShot(series, firstShot(series))!;
+    expect(second.index).toBe(1);
+    expect(nextShot(series, second)).toBeUndefined();
   });
 });
 

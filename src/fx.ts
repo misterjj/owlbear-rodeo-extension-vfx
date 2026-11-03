@@ -467,6 +467,9 @@ export function effectScale(style: StyleId, size: SizeId, cells: number | undefi
   return cells !== undefined && STYLES[style].exactZone ? cells / STYLES[style].reach : SIZES[size];
 }
 
+/** Durée d'un saut de chaîne à la taille M. */
+export const CHAIN_HOP_MS = 600;
+
 /** Les grands effets durent un peu plus longtemps, sans s'éterniser pour une très grande zone. */
 export const scaledDuration = (base: number, scale: number) =>
   Math.round(base * Math.sqrt(Math.min(scale, 4)));
