@@ -5,15 +5,40 @@
  * Les couleurs sont renvoyées prémultipliées par l'opacité, comme l'attend Owlbear.
  *
  * `palette` contient les couleurs de l'élément : froide, moyenne, chaude.
+ *
+ * Un effet bref reçoit `t`, de 0 à 1, envoyé par l'extension. Un effet durable se sert de `time`,
+ * l'horloge fournie par Owlbear : il s'anime sans aucun message et reste à sa pleine intensité.
+ * `clock()` fait avancer le mouvement au même rythme dans les deux cas, en durée de l'effet bref ;
+ * `life()` donne l'avancement de son apparition et de sa disparition.
  */
-const COMMON = `
+interface Timing {
+  uniform: string;
+  clock: (seconds: number) => string;
+  life: string;
+}
+
+const BRIEF: Timing = { uniform: "uniform float t;", clock: () => "t", life: "t" };
+// Le modulo évite de perdre en précision au bout de plusieurs heures.
+const DURABLE: Timing = {
+  uniform: "uniform float time;",
+  clock: (seconds) => `mod(time, 1000.0) / ${seconds.toFixed(1)}`,
+  life: "0.5",
+};
+
+const common = (timing: Timing, seconds: number) => `
 uniform mat3 model;
 uniform mat3 palette;
-uniform float t;
+${timing.uniform}
 uniform float seed;
 uniform float warp;
 uniform float unit;
 
+float clock() {
+  return ${timing.clock(seconds)};
+}
+float life() {
+  return ${timing.life};
+}
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
@@ -49,11 +74,13 @@ vec2 local(float2 coord) {
   if (warp > 0.0) {
     // Ondulation exprimée en cases, pour rester la même quelle que soit la grille.
     vec2 q = p / unit;
-    p += warp * unit * 0.09 * vec2(sin(q.y * 4.5 + t * 16.0 + seed), sin(q.x * 4.5 + t * 16.0 + seed));
+    p += warp * unit * 0.09 * vec2(sin(q.y * 4.5 + clock() * 16.0 + seed), sin(q.x * 4.5 + clock() * 16.0 + seed));
   }
   return p;
 }
 `;
+
+const COMMON = common(BRIEF, 1);
 
 export const EXPLOSION_SKSL = `${COMMON}
 uniform vec3 smoke;
@@ -150,7 +177,7 @@ half4 main(float2 coord) {
 }
 `;
 
-export const RAIN_SKSL = `${COMMON}
+const rain = (timing: Timing) => `${common(timing, 3)}
 uniform float radius;
 uniform float stretch;
 uniform float fallSpeed;
@@ -160,7 +187,8 @@ half4 main(float2 coord) {
   float d = length(p);
   if (d > 1.2) return half4(0.0);
 
-  float fade = smoothstep(0.0, 0.12, t) * (1.0 - smoothstep(0.78, 1.0, t));
+  float now = clock();
+  float fade = smoothstep(0.0, 0.12, life()) * (1.0 - smoothstep(0.78, 1.0, life()));
   float mask = 1.0 - smoothstep(0.8, 1.08, d + (noise(p * 4.0 + seed) - 0.5) * 0.25);
 
   // Sol touché par la pluie.
@@ -173,7 +201,7 @@ half4 main(float2 coord) {
   for (int layer = 0; layer < 3; layer++) {
     float l = float(layer);
     float cells = 5.0 + l * 2.5;
-    vec2 q = p * cells + vec2(l * 3.7 + seed, -t * fallSpeed * (5.0 + l));
+    vec2 q = p * cells + vec2(l * 3.7 + seed, -now * fallSpeed * (5.0 + l));
     vec2 id = floor(q);
     vec2 f = fract(q) - 0.5;
     if (hash(id + l + seed) < 0.7) {
@@ -191,7 +219,7 @@ half4 main(float2 coord) {
     float index = float(i) + seed;
     float angle = hash(vec2(index, 2.1)) * 6.2832;
     float distance = sqrt(hash(vec2(index, 5.3))) * 0.85;
-    float phase = fract(t * 3.0 + hash(vec2(index, 8.7)));
+    float phase = fract(now * 3.0 + hash(vec2(index, 8.7)));
     vec2 offset = p - vec2(cos(angle), sin(angle)) * distance;
     float ringOffset = (length(offset) - phase * 0.1) / 0.01;
     splashes += exp(-ringOffset * ringOffset) * (1.0 - phase) * 0.7;
@@ -282,7 +310,7 @@ half4 main(float2 coord) {
 }
 `;
 
-export const AURA_SKSL = `${COMMON}
+const aura = (timing: Timing) => `${common(timing, 2.2)}
 uniform float radius;
 
 half4 main(float2 coord) {
@@ -290,14 +318,17 @@ half4 main(float2 coord) {
   float d = length(p);
   if (d > 1.9) return half4(0.0);
 
-  float fade = smoothstep(0.0, 0.2, t) * (1.0 - smoothstep(0.65, 1.0, t));
+  float now = clock();
+  float fade = smoothstep(0.0, 0.2, life()) * (1.0 - smoothstep(0.65, 1.0, life()));
   float angle = atan(p.y, p.x);
 
   // Cercle au sol, parcouru par une énergie qui tourne.
-  float swirl = fbm(vec2(angle * 2.0 + t * 5.0 + seed, d * 4.0 - t * 3.0));
+  // Bruit lu sur le cercle plutôt que sur l'angle, qui ferait une coupure là où il saute de -π à π.
+  float turning = angle + now * 2.5;
+  float swirl = fbm(vec2(cos(turning), sin(turning)) * 1.6 + vec2(seed, d * 4.0 - now * 3.0));
   float ringOffset = (d - 0.88 - (swirl - 0.5) * 0.1) / 0.085;
   float ring = exp(-ringOffset * ringOffset);
-  float inside = (1.0 - smoothstep(0.1, 0.95, d)) * (0.08 + fbm(p * 3.0 + seed - t) * 0.4);
+  float inside = (1.0 - smoothstep(0.1, 0.95, d)) * (0.08 + fbm(p * 3.0 + seed - now) * 0.4);
 
   // Particules qui montent.
   float motes = 0.0;
@@ -305,7 +336,7 @@ half4 main(float2 coord) {
     float index = float(i) + seed;
     float a = hash(vec2(index, 3.3)) * 6.2832;
     float distance = 0.25 + hash(vec2(index, 6.1)) * 0.68;
-    float phase = fract(t * 1.6 + hash(vec2(index, 9.2)));
+    float phase = fract(now * 1.6 + hash(vec2(index, 9.2)));
     vec2 mote = vec2(cos(a) * distance, sin(a) * distance * 0.8 - phase * 0.9);
     vec2 offset = p - mote;
     motes += exp(-dot(offset, offset) * 900.0) * (1.0 - phase) * smoothstep(0.0, 0.15, phase);
@@ -550,7 +581,7 @@ half4 main(float2 coord) {
 }
 `;
 
-export const WALL_SKSL = `${COMMON}
+const wall = (timing: Timing) => `${common(timing, 3.5)}
 uniform vec2 target;
 uniform float width;
 uniform float rough;
@@ -563,21 +594,21 @@ half4 main(float2 coord) {
   float across = dot(p, vec2(-dir.y, dir.x));
 
   // Le mur se dresse du premier clic vers le second, puis retombe.
-  float reach = smoothstep(0.0, 0.22, t) * len;
+  float reach = smoothstep(0.0, 0.22, life()) * len;
   float over = along - clamp(along, 0.0, reach);
   float d = length(vec2(over, across)) / width;
   if (d > 2.2) return half4(0.0);
 
-  float n = fbm(vec2(along / width * 0.55 * rough + seed, across / width * 0.5 - t * 9.0));
-  float sink = 1.0 - smoothstep(0.76, 1.0, t);
+  float n = fbm(vec2(along / width * 0.55 * rough + seed, across / width * 0.5 - clock() * 9.0));
+  float sink = 1.0 - smoothstep(0.76, 1.0, life());
   float body = (1.0 - d + (n - 0.5) * 1.3) * sink;
-  float alpha = smoothstep(0.0, 0.22, body) * smoothstep(0.0, 0.05, t);
+  float alpha = smoothstep(0.0, 0.22, body) * smoothstep(0.0, 0.05, life());
   float heat = clamp(body * 1.5 + 0.05, 0.0, 1.0);
   return half4(ramp(heat) * alpha, alpha);
 }
 `;
 
-export const DOME_SKSL = `${COMMON}
+const dome = (timing: Timing) => `${common(timing, 3)}
 uniform float radius;
 
 half4 main(float2 coord) {
@@ -586,22 +617,22 @@ half4 main(float2 coord) {
   if (raw > 1.15) return half4(0.0);
 
   // La bulle s'ouvre, tient, puis se referme sur elle-même.
-  float open = 1.0 - pow(1.0 - clamp(t / 0.22, 0.0, 1.0), 3.0);
-  float close = smoothstep(0.82, 1.0, t);
+  float open = 1.0 - pow(1.0 - clamp(life() / 0.22, 0.0, 1.0), 3.0);
+  float close = smoothstep(0.82, 1.0, life());
   float size = max(open * (1.0 - close * 0.25), 0.001);
   float d = raw / size;
   if (d > 1.06) return half4(0.0);
 
   // Plus dense sur le bord, comme une sphère vue de haut.
   float rim = pow(clamp(d, 0.0, 1.0), 5.0);
-  float n = fbm(p * 4.0 + vec2(seed, t * 3.0));
+  float n = fbm(p * 4.0 + vec2(seed, clock() * 3.0));
   float veil = 0.1 + smoothstep(0.42, 0.72, n) * 0.22;
   vec2 sheenOffset = p - vec2(-0.36, -0.42) * size;
   float sheen = exp(-dot(sheenOffset, sheenOffset) * 9.0) * 0.3;
 
   // Vague qui parcourt la bulle à l'ouverture.
-  float waveOffset = (d - clamp(t / 0.35, 0.0, 1.0)) / 0.09;
-  float wave = exp(-waveOffset * waveOffset) * (1.0 - smoothstep(0.2, 0.4, t)) * 0.6;
+  float waveOffset = (d - clamp(life() / 0.35, 0.0, 1.0)) / 0.09;
+  float wave = exp(-waveOffset * waveOffset) * (1.0 - smoothstep(0.2, 0.4, life())) * 0.6;
 
   float edge = 1.0 - smoothstep(1.0, 1.06, d);
   float fade = 1.0 - close;
@@ -610,3 +641,42 @@ half4 main(float2 coord) {
   return half4(ramp(0.3 + heat * 0.7) * alpha, alpha);
 }
 `;
+
+const cloud = (timing: Timing) => `${common(timing, 4)}
+uniform vec3 smoke;
+uniform float radius;
+uniform float density;
+
+half4 main(float2 coord) {
+  vec2 p = local(coord) / radius;
+  float d = length(p);
+  if (d > 1.4) return half4(0.0);
+
+  // Le nuage dérive lentement, avec un bord irrégulier qui se déforme.
+  float now = clock() * 4.0;
+  float edge = 1.0 - d + (fbm(p * 2.5 + seed + now * 0.18) - 0.5) * 0.55;
+  float mask = smoothstep(0.0, 0.2, edge);
+  float n = fbm(p * 3.2 + vec2(seed + now * 0.22, seed * 0.5 - now * 0.15));
+  float envelope = smoothstep(0.0, 0.12, life()) * (1.0 - smoothstep(0.72, 1.0, life()));
+
+  float alpha = mask * envelope * density * (0.72 + n * 0.5);
+  alpha = clamp(alpha, 0.0, 1.0);
+  vec3 color = mix(smoke, ramp(n * 0.8), 0.5);
+  return half4(color * alpha, alpha);
+}
+`;
+
+export const RAIN_SKSL = rain(BRIEF);
+export const AURA_SKSL = aura(BRIEF);
+export const WALL_SKSL = wall(BRIEF);
+export const DOME_SKSL = dome(BRIEF);
+export const CLOUD_SKSL = cloud(BRIEF);
+
+/** Versions continues des styles qui peuvent durer. */
+export const DURABLE_SKSL = {
+  pluie: rain(DURABLE),
+  aura: aura(DURABLE),
+  mur: wall(DURABLE),
+  dome: dome(DURABLE),
+  nuage: cloud(DURABLE),
+};

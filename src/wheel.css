@@ -14,6 +14,7 @@ body { font: 12px/1.25 system-ui, sans-serif; color: #eef0f6; user-select: none;
 .spell span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .spell:hover, .spell:focus-visible { transform: translate(-50%, -50%) scale(1.14); border-color: #fff; z-index: 1; }
 .spell:focus-visible, .center:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.spell.lit { border-color: #fff; box-shadow: 0 0 0 3px #bb99ff, 0 0 14px 4px #bb99ff; }
 .center {
   left: 50%; top: 50%; width: 36px; height: 36px; font-size: 16px; color: #fff;
   background: rgb(30 32 44 / 0.88); border: 2px solid rgb(255 255 255 / 0.5);

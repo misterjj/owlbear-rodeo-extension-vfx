@@ -9,12 +9,21 @@ import {
   STYLE_IDS,
   MAX_FAVORITES,
   MAX_SPELLS,
+  MAX_DURABLE,
+  canBeDurable,
   castsOnSelf,
+  durableChanges,
+  durableItemId,
+  durablesIn,
+  firesFromToken,
+  isDurable,
+  sameDurable,
   defaultSpellName,
   parseWheelCast,
   renameSpell,
   spellsOf,
   wheelPositions,
+  type DurableEntry,
   type Favorite,
   addFavorite,
   arrowDuration,
@@ -81,7 +90,14 @@ describe("messages d'effet", () => {
 });
 
 describe("zone exacte et MJ seulement dans les messages", () => {
-  const full = { element: "feu", style: "explosion", size: "M", exact: 6, gmOnly: true } as const;
+  const full = {
+    element: "feu",
+    style: "explosion",
+    size: "M",
+    exact: 6,
+    gmOnly: true,
+    durable: false,
+  } as const;
 
   it("convertit la zone dans l'unité de la scène en cases", () => {
     expect(buildMessage(full, at, undefined, 1.5, 3)).toEqual({
@@ -123,7 +139,14 @@ describe("zone exacte et MJ seulement dans les messages", () => {
 });
 
 describe("favoris", () => {
-  const current = { element: "feu", style: "explosion", size: "L", exact: null, gmOnly: true } as const;
+  const current = {
+    element: "feu",
+    style: "explosion",
+    size: "L",
+    exact: null,
+    gmOnly: true,
+    durable: false,
+  } as const;
 
   it("enregistre un favori sans le drapeau MJ seulement", () => {
     expect(addFavorite([], "  Boule de feu ", current)).toEqual([
@@ -220,7 +243,14 @@ describe("réglages", () => {
   it("retrouve le dernier réglage", () => {
     const storage = memoryStorage();
     expect(loadChoice(storage)).toEqual(DEFAULT_CHOICE);
-    const saved = { element: "poison", style: "aura", size: "XS", exact: 6, gmOnly: true } as const;
+    const saved = {
+      element: "poison",
+      style: "aura",
+      size: "XS",
+      exact: 6,
+      gmOnly: true,
+      durable: true,
+    } as const;
     saveChoice(storage, saved);
     expect(loadChoice(storage)).toEqual(saved);
   });
@@ -243,7 +273,7 @@ describe("réglages", () => {
   });
 
   it("propose tous les styles, et demande un lanceur seulement à ceux qui partent d'un point", () => {
-    expect(STYLE_IDS).toHaveLength(15);
+    expect(STYLE_IDS).toHaveLength(16);
     expect(STYLE_IDS.filter((id) => STYLES[id].directed)).toEqual([
       "fleche",
       "projectile",
@@ -276,18 +306,31 @@ describe("géométrie", () => {
   });
 
   it("place tous les effets avec le repère fourni par Owlbear", () => {
-    const sources = Object.values(shaders);
-    expect(sources).toHaveLength(13);
+    const sources = Object.values(shaders).filter((value) => typeof value === "string");
+    expect(sources).toHaveLength(14);
     for (const sksl of sources) {
       expect(sksl).toContain("uniform mat3 model;");
       expect(sksl).toContain("uniform float t;");
     }
+  });
+
+  it("anime les effets durables avec l'horloge d'Owlbear, sans message", () => {
+    for (const sksl of Object.values(shaders.DURABLE_SKSL)) {
+      expect(sksl).toContain("uniform mat3 model;");
+      expect(sksl).toContain("uniform float time;");
+      expect(sksl).not.toContain("uniform float t;");
+    }
+  });
+
+  it("propose une version continue pour chaque style qui peut durer", () => {
+    expect(STYLE_IDS.filter(canBeDurable).sort()).toEqual(Object.keys(shaders.DURABLE_SKSL).sort());
   });
 });
 
 describe("clic sur un token", () => {
   const token = (x: number, layer = "CHARACTER", zIndex = 1) => ({
     id: `token-${x}`,
+    name: `Token ${x}`,
     owner: "mj",
     width: 100,
     center: { x, y: 0 },
@@ -384,6 +427,105 @@ describe("sorts d'un token", () => {
     expect(radius + button / 2).toBeLessThanOrEqual(size / 2);
     const [a, b] = wheelPositions(MAX_SPELLS, radius);
     expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(button);
+  });
+});
+
+describe("effets durables", () => {
+  const key = "vfx-owlbear/durable";
+
+  it("ne rend durable que les styles prévus", () => {
+    expect(isDurable({ style: "nuage", durable: true })).toBe(true);
+    expect(isDurable({ style: "nuage", durable: false })).toBe(false);
+    expect(isDurable({ style: "nuage" })).toBe(false);
+    expect(isDurable({ style: "explosion", durable: true })).toBe(false);
+  });
+
+  const entry: DurableEntry = {
+    id: "e1",
+    name: "Aura ténébreuse",
+    element: "tenebres",
+    style: "nuage",
+    scale: 1.2,
+    seed: 3,
+    at,
+    carrier: { id: "mante", name: "Mante" },
+    gmOnly: false,
+    owner: "mj",
+  };
+
+  it("relit la description et écarte ce qui est invalide", () => {
+    expect(durablesIn({ [key]: [entry] })).toEqual([entry]);
+    expect(durablesIn({})).toEqual([]);
+    expect(durablesIn({ [key]: "non" })).toEqual([]);
+    for (const bad of [
+      { ...entry, element: "constructor" },
+      { ...entry, style: "explosion" },
+      { ...entry, scale: 0 },
+      { ...entry, at: { x: Number.NaN, y: 0 } },
+      { ...entry, carrier: { id: 1 } },
+      { ...entry, owner: undefined },
+    ]) {
+      expect(durablesIn({ [key]: [bad] })).toEqual([]);
+    }
+  });
+
+  it("ne garde pas plus d'effets que la limite", () => {
+    const many = Array.from({ length: MAX_DURABLE + 2 }, (_, i) => ({ ...entry, id: `e${i}` }));
+    expect(durablesIn({ [key]: many })).toHaveLength(MAX_DURABLE);
+  });
+
+  it("reconnaît le même effet déjà allumé, quelle que soit sa taille", () => {
+    expect(sameDurable(entry, { element: "tenebres", style: "nuage", size: "XL" })).toBe(true);
+    expect(sameDurable(entry, { element: "feu", style: "nuage", size: "M" })).toBe(false);
+  });
+
+  describe("effets locaux de chaque joueur", () => {
+    const exists = (id: string) => id === "mante";
+    const onMap = { ...entry, id: "e2", carrier: undefined };
+    const hidden = { ...entry, id: "e3", gmOnly: true };
+    const gone = { ...entry, id: "e4", carrier: { id: "parti", name: "Parti" } };
+
+    it("crée ce qui manque et retire ce qui n'est plus décrit", () => {
+      const result = durableChanges([entry, onMap], [durableItemId("e1"), durableItemId("vieux")], "GM", exists);
+      expect(result.add).toEqual([onMap]);
+      expect(result.remove).toEqual([durableItemId("vieux")]);
+    });
+
+    it("ne recrée rien quand tout est en place", () => {
+      expect(durableChanges([entry], [durableItemId("e1")], "PLAYER", exists)).toEqual({ add: [], remove: [] });
+    });
+
+    it("ne montre « MJ seulement » qu'aux MJ", () => {
+      expect(durableChanges([hidden], [], "GM", exists).add).toEqual([hidden]);
+      expect(durableChanges([hidden], [], "PLAYER", exists).add).toEqual([]);
+      expect(durableChanges([hidden], [durableItemId("e3")], "PLAYER", exists).remove).toHaveLength(1);
+    });
+
+    it("ignore un effet dont le porteur n'existe plus", () => {
+      expect(durableChanges([gone], [], "GM", exists).add).toEqual([]);
+    });
+  });
+
+  it("depuis la roue, n'attend un clic que s'il faut choisir un point", () => {
+    expect(firesFromToken({ style: "nuage", durable: true })).toBe(true);
+    expect(firesFromToken({ style: "pluie", durable: true })).toBe(true);
+    expect(firesFromToken({ style: "nuage" })).toBe(false);
+    expect(firesFromToken({ style: "mur", durable: true })).toBe(false);
+    expect(firesFromToken({ style: "aura" })).toBe(true);
+  });
+
+  it("limite leur nombre et rend les ténèbres presque opaques", () => {
+    expect(MAX_DURABLE).toBeGreaterThan(0);
+    expect(ELEMENTS.tenebres.density).toBeGreaterThan(0.9);
+    expect(ELEMENTS.poison.density).toBeLessThan(0.7);
+  });
+
+  it("garde l'option durable dans un favori et la reconnaît", () => {
+    const choice = { element: "feu", style: "aura", size: "M", exact: null, gmOnly: false, durable: true } as const;
+    const [favorite] = addFavorite([], "Bouclier", choice);
+    expect(favorite.durable).toBe(true);
+    expect(matchesFavorite(favorite, choice)).toBe(true);
+    expect(matchesFavorite(favorite, { ...choice, durable: false })).toBe(false);
   });
 });
 

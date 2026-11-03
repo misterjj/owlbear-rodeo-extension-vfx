@@ -10,6 +10,10 @@ export const FX_WHEEL_ID = `${PLUGIN_ID}/roue`;
 export const FX_WHEEL_CHANNEL = `${PLUGIN_ID}/sort-choisi`;
 /** Sorts d'un token, enregistrés dans ses métadonnées : ils le suivent. */
 export const FX_SPELLS_KEY = `${PLUGIN_ID}/sorts`;
+/** Liste des effets durables, enregistrée dans les métadonnées de la scène. */
+export const FX_DURABLE_KEY = `${PLUGIN_ID}/durable`;
+/** Début de l'identifiant des effets qui en sont tirés, créés localement chez chaque joueur. */
+export const FX_DURABLE_ITEM_PREFIX = `${PLUGIN_ID}/durable/`;
 /** Réglages communs à la salle, enregistrés dans ses métadonnées. */
 export const FX_ROOM_KEY = `${PLUGIN_ID}/reglages`;
 
@@ -34,6 +38,8 @@ export interface ElementLook {
   warp: number;
   /** Part de l'onde de choc dans une explosion : 0 pour une boule pleine, 1 pour une onde presque seule. */
   shock: number;
+  /** Opacité d'un nuage : ceux qui doivent cacher ce qu'ils couvrent sont presque opaques. */
+  density: number;
 }
 
 export const ELEMENTS = {
@@ -47,6 +53,7 @@ export const ELEMENTS = {
     jag: 0.15,
     warp: 0,
     shock: 0,
+    density: 0.6,
   },
   glace: {
     label: "Glace",
@@ -58,6 +65,7 @@ export const ELEMENTS = {
     jag: 0.05,
     warp: 0,
     shock: 0,
+    density: 0.6,
   },
   foudre: {
     label: "Foudre",
@@ -69,6 +77,7 @@ export const ELEMENTS = {
     jag: 1,
     warp: 0,
     shock: 0,
+    density: 0.6,
   },
   poison: {
     label: "Poison",
@@ -80,6 +89,7 @@ export const ELEMENTS = {
     jag: 0.2,
     warp: 0,
     shock: 0,
+    density: 0.6,
   },
   acide: {
     label: "Acide",
@@ -91,6 +101,7 @@ export const ELEMENTS = {
     jag: 0.25,
     warp: 0,
     shock: 0,
+    density: 0.6,
   },
   tenebres: {
     label: "Ténèbres",
@@ -102,6 +113,7 @@ export const ELEMENTS = {
     jag: 0.3,
     warp: 0,
     shock: 0,
+    density: 0.93,
   },
   lumiere: {
     label: "Lumière",
@@ -113,6 +125,7 @@ export const ELEMENTS = {
     jag: 0.05,
     warp: 0,
     shock: 0,
+    density: 0.6,
   },
   force: {
     label: "Force",
@@ -124,6 +137,7 @@ export const ELEMENTS = {
     jag: 0,
     warp: 0,
     shock: 0.3,
+    density: 0.6,
   },
   necrotique: {
     label: "Nécrotique",
@@ -135,6 +149,7 @@ export const ELEMENTS = {
     jag: 0.35,
     warp: 0.3,
     shock: 0,
+    density: 0.6,
   },
   psychique: {
     label: "Psychique",
@@ -146,6 +161,7 @@ export const ELEMENTS = {
     jag: 0.3,
     warp: 1,
     shock: 0.2,
+    density: 0.6,
   },
   tonnerre: {
     label: "Tonnerre",
@@ -157,6 +173,7 @@ export const ELEMENTS = {
     jag: 0.5,
     warp: 0,
     shock: 1,
+    density: 0.6,
   },
   physique: {
     label: "Physique",
@@ -168,6 +185,7 @@ export const ELEMENTS = {
     jag: 0,
     warp: 0,
     shock: 0.2,
+    density: 0.6,
   },
   sang: {
     label: "Sang",
@@ -179,6 +197,7 @@ export const ELEMENTS = {
     jag: 0.1,
     warp: 0,
     shock: 0,
+    density: 0.6,
   },
   eau: {
     label: "Eau",
@@ -190,6 +209,7 @@ export const ELEMENTS = {
     jag: 0.1,
     warp: 0.5,
     shock: 0.1,
+    density: 0.6,
   },
   terre: {
     label: "Terre",
@@ -201,6 +221,7 @@ export const ELEMENTS = {
     jag: 0.4,
     warp: 0,
     shock: 0,
+    density: 0.6,
   },
   vent: {
     label: "Vent",
@@ -212,6 +233,7 @@ export const ELEMENTS = {
     jag: 0.15,
     warp: 1.6,
     shock: 0.5,
+    density: 0.6,
   },
 } as const satisfies Record<string, ElementLook>;
 
@@ -233,6 +255,7 @@ export const STYLES = {
   pluie: { label: "Pluie", directed: false, reach: 3, exactZone: true },
   mur: { label: "Mur", directed: true, reach: 0, exactZone: false },
   dome: { label: "Dôme", directed: false, reach: 2.5, exactZone: true },
+  nuage: { label: "Nuage", directed: false, reach: 2.5, exactZone: true },
   aura: { label: "Aura", directed: false, reach: 1.5, exactZone: true },
   soin: { label: "Soin", directed: false, reach: 1, exactZone: true },
   teleportation: { label: "Téléportation", directed: true, reach: 0, exactZone: false },
@@ -266,6 +289,8 @@ export interface FxChoice extends FxCast {
   exact: number | null;
   /** Seuls les MJ voient l'effet. */
   gmOnly: boolean;
+  /** L'effet reste, sur la carte ou attaché à un token, jusqu'à ce qu'on le retire. */
+  durable: boolean;
 }
 
 /** La graine est transmise pour que l'effet ait la même forme chez tous les joueurs. */
@@ -352,6 +377,7 @@ export const DEFAULT_CHOICE: FxChoice = {
   size: "M",
   exact: null,
   gmOnly: false,
+  durable: false,
 };
 
 type ChoiceStorage = Pick<Storage, "getItem" | "setItem">;
@@ -366,6 +392,7 @@ export function loadChoice(storage: ChoiceStorage): FxChoice {
       size: isKeyOf(SIZES, saved?.size) ? saved.size : DEFAULT_CHOICE.size,
       exact: isExact(saved?.exact) ? saved.exact : null,
       gmOnly: saved?.gmOnly === true,
+      durable: saved?.durable === true,
     };
   } catch {
     return DEFAULT_CHOICE;
@@ -384,6 +411,7 @@ export function projectileDuration(from: Point, to: Point, dpi: number) {
 
 export interface TokenArea {
   id: string;
+  name: string;
   owner: string;
   width: number;
   center: Point;
@@ -449,6 +477,7 @@ export const MAX_NAME_LENGTH = 30;
 export interface Favorite extends FxCast {
   name: string;
   exact: number | null;
+  durable?: boolean;
 }
 
 const isFavorite = (value: unknown): value is Favorite => {
@@ -491,6 +520,7 @@ export function addFavorite(
     style: choice.style,
     size: choice.size,
     exact: choice.exact,
+    ...(isDurable(choice) ? { durable: true } : {}),
   };
   const key = trimmed.toLowerCase();
   const index = favorites.findIndex((other) => other.name.toLowerCase() === key);
@@ -503,7 +533,8 @@ export const matchesFavorite = (favorite: Favorite, choice: FxChoice) =>
   favorite.element === choice.element &&
   favorite.style === choice.style &&
   favorite.size === choice.size &&
-  favorite.exact === choice.exact;
+  favorite.exact === choice.exact &&
+  Boolean(favorite.durable) === isDurable(choice);
 
 export interface Outline {
   points: Point[];
@@ -590,3 +621,88 @@ export function wheelPositions(count: number, radius: number): Point[] {
     return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
   });
 }
+
+const DURABLE_STYLES: readonly StyleId[] = ["aura", "pluie", "dome", "mur", "nuage"];
+
+export const canBeDurable = (style: StyleId) => DURABLE_STYLES.includes(style);
+
+export const isDurable = ({ style, durable }: { style: StyleId; durable?: boolean }) =>
+  durable === true && canBeDurable(style);
+
+/** Chaque effet durable est recalculé en permanence par tous les joueurs : leur nombre est limité. */
+export const MAX_DURABLE = 8;
+
+/**
+ * Description partagée d'un effet durable. Owlbear ne garde pas les effets dans la scène partagée :
+ * chaque joueur crée le sien à partir de cette description, comme le fait son extension de météo.
+ */
+export interface DurableEntry {
+  id: string;
+  name: string;
+  element: ElementId;
+  style: StyleId;
+  /** Facteur d'échelle de l'effet : 1 pour la taille M. */
+  scale: number;
+  seed: number;
+  /** Point visé sur la carte ; pour un mur, sa fin. Sans effet si l'entrée a un porteur. */
+  at: Point;
+  /** Début d'un mur. */
+  from?: Point;
+  /** Token porteur : l'effet le suit. */
+  carrier?: { id: string; name: string };
+  gmOnly: boolean;
+  owner: string;
+}
+
+const isDurableEntry = (value: unknown): value is DurableEntry => {
+  const entry = value as Partial<DurableEntry> | null;
+  return (
+    typeof entry?.id === "string" &&
+    typeof entry.name === "string" &&
+    isKeyOf(ELEMENTS, entry.element) &&
+    isKeyOf(STYLES, entry.style) &&
+    canBeDurable(entry.style) &&
+    isExact(entry.scale) &&
+    typeof entry.seed === "number" &&
+    Number.isFinite(entry.seed) &&
+    isPoint(entry.at) &&
+    (entry.from === undefined || isPoint(entry.from)) &&
+    (entry.carrier === undefined ||
+      (typeof entry.carrier.id === "string" && typeof entry.carrier.name === "string")) &&
+    typeof entry.gmOnly === "boolean" &&
+    typeof entry.owner === "string"
+  );
+};
+
+export function durablesIn(metadata: Record<string, unknown>): DurableEntry[] {
+  const saved = metadata[FX_DURABLE_KEY];
+  return Array.isArray(saved) ? saved.filter(isDurableEntry).slice(0, MAX_DURABLE) : [];
+}
+
+/** Même effet déjà attaché à ce token : un nouveau clic sert à l'éteindre. */
+export const sameDurable = (entry: DurableEntry, { element, style }: FxCast) =>
+  entry.element === element && entry.style === style;
+
+export const durableItemId = (entryId: string) => `${FX_DURABLE_ITEM_PREFIX}${entryId}`;
+
+/** Ce qu'un joueur doit ajouter ou retirer pour que ses effets locaux suivent la description. */
+export function durableChanges(
+  entries: DurableEntry[],
+  itemIds: string[],
+  role: "GM" | "PLAYER",
+  tokenExists: (id: string) => boolean,
+) {
+  const wanted = entries.filter(
+    ({ carrier, gmOnly }) =>
+      (role === "GM" || !gmOnly) && (carrier === undefined || tokenExists(carrier.id)),
+  );
+  const wantedIds = new Set(wanted.map(({ id }) => durableItemId(id)));
+  return {
+    add: wanted.filter(({ id }) => !itemIds.includes(durableItemId(id))),
+    remove: itemIds.filter((id) => !wantedIds.has(id)),
+  };
+}
+
+/** La durée d'un sort lancé depuis la roue : on ne vise que s'il y a un point à choisir. */
+export const firesFromToken = (spell: { style: StyleId; durable?: boolean }) =>
+  castsOnSelf(spell.style) || (isDurable(spell) && !STYLES[spell.style].directed);

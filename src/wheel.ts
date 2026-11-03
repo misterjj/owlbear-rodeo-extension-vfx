@@ -9,11 +9,15 @@ import {
   STYLES,
   addFavorite,
   defaultSpellName,
+  durablesIn,
+  isDurable,
   loadChoice,
   loadFavorites,
   renameSpell,
+  sameDurable,
   spellsOf,
   wheelPositions,
+  type DurableEntry,
   type Favorite,
   type Rgb,
 } from "./fx";
@@ -23,6 +27,11 @@ const app = document.querySelector<HTMLDivElement>("#app")!;
 const tokenId = new URLSearchParams(location.search).get("token") ?? "";
 let spells: Favorite[] = [];
 let tokenName = "";
+/** Effets durables allumés sur ce token. */
+let lit: DurableEntry[] = [];
+
+const isLit = (spell: Favorite) =>
+  isDurable(spell) && lit.some((entry) => sameDurable(entry, spell));
 
 const css = ([r, g, b]: Rgb) => `rgb(${r * 255} ${g * 255} ${b * 255})`;
 
@@ -59,7 +68,7 @@ function renderWheel() {
     ${spells
       .map((spell, index) => {
         const { x, y } = positions[index];
-        return `<button type="button" class="spell" data-spell="${index}" title="${escapeHtml(spell.name)}" style="left: ${50 + x}%; top: ${50 + y}%; background: ${spellBackground(spell)}"><span>${escapeHtml(spell.name)}</span></button>`;
+        return `<button type="button" class="spell${isLit(spell) ? " lit" : ""}" data-spell="${index}" title="${escapeHtml(spell.name)}${isLit(spell) ? " : allumé, cliquer pour l'éteindre" : ""}" style="left: ${50 + x}%; top: ${50 + y}%; background: ${spellBackground(spell)}"><span>${escapeHtml(spell.name)}</span></button>`;
       })
       .join("")}
     <button type="button" class="center" id="manage" title="Gérer les sorts" aria-label="Gérer les sorts">⚙</button>`;
@@ -90,6 +99,7 @@ function renderManage() {
     style: choice.style,
     size: choice.size,
     exact: choice.exact,
+    ...(isDurable(choice) ? { durable: true } : {}),
   };
   const candidates = [current, ...loadFavorites(localStorage)];
   const full = spells.length >= MAX_SPELLS;
@@ -108,7 +118,7 @@ function renderManage() {
                   (spell, index) => `
                     <div class="row">
                       <input type="text" data-name="${index}" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(spell.name)}" aria-label="Nom du sort ${escapeHtml(spell.name)}" />
-                      <small>${STYLES[spell.style].label}</small>
+                      <small>${STYLES[spell.style].label}${isDurable(spell) ? ", durable" : ""}</small>
                       <button type="button" data-remove="${index}" aria-label="Retirer ${escapeHtml(spell.name)}" title="Retirer">✕</button>
                     </div>`,
                 )
@@ -150,7 +160,7 @@ function renderManage() {
       refresh(spells.filter((_, index) => index !== Number(element.dataset.remove)));
   });
   const add = (candidate: Favorite, name: string) =>
-    refresh(addFavorite(spells, name, { ...candidate, gmOnly: false }, MAX_SPELLS));
+    refresh(addFavorite(spells, name, { ...candidate, gmOnly: false, durable: candidate.durable === true }, MAX_SPELLS));
   app.querySelectorAll<HTMLButtonElement>(".add").forEach((element) => {
     element.onclick = () => {
       const candidate = candidates[Number(element.dataset.add)];
@@ -192,6 +202,7 @@ OBR.onReady(async () => {
   }
   tokenName = item.name;
   spells = spellsOf(item.metadata);
+  lit = durablesIn(await OBR.scene.getMetadata()).filter(({ carrier }) => carrier?.id === tokenId);
   // Un clic dans le vide de la roue la referme, comme un clic à côté.
   document.body.onclick = () => close();
   if (spells.length) renderWheel();

@@ -4,6 +4,7 @@ import OBR, {
   buildShape,
   isCurve,
   isEffect,
+  type Item,
   type Matrix,
   type ToolEvent,
   type Uniform,
@@ -11,20 +12,28 @@ import OBR, {
 import {
   ELEMENTS,
   FX_CHANNEL,
+  FX_DURABLE_ITEM_PREFIX,
+  FX_DURABLE_KEY,
   FX_PANEL_ID,
   FX_PREVIEW_ID,
   FX_SOURCE_ID,
   FX_TOOL_ID,
   FX_WHEEL_CHANNEL,
   FX_WHEEL_ID,
+  MAX_DURABLE,
   STYLES,
   arrowDuration,
   buildMessage,
-  castsOnSelf,
   coneTarget,
+  defaultSpellName,
+  durableChanges,
+  durableItemId,
+  durablesIn,
   effectScale,
   exactCells,
+  firesFromToken,
   fitsCellCenter,
+  isDurable,
   loadChoice,
   parseFxMessage,
   parseWheelCast,
@@ -32,10 +41,12 @@ import {
   playersAllowedIn,
   previewOutline,
   projectileDuration,
+  sameDurable,
   scaledDuration,
   teleportTiming,
   tokenAt,
   type ElementId,
+  type DurableEntry,
   type Favorite,
   type FxChoice,
   type FxMessage,
@@ -47,8 +58,10 @@ import {
   AURA_SKSL,
   BEAM_SKSL,
   BITE_SKSL,
+  CLOUD_SKSL,
   CONE_SKSL,
   DOME_SKSL,
+  DURABLE_SKSL,
   EXPLOSION_SKSL,
   HEAL_SKSL,
   PROJECTILE_SKSL,
@@ -59,8 +72,8 @@ import {
 } from "./fx-shaders";
 
 const PANEL_WIDTH = 320;
-const PANEL_HEIGHT_GM = 736;
-const PANEL_HEIGHT_PLAYER = 660;
+const PANEL_HEIGHT_GM = 800;
+const PANEL_HEIGHT_PLAYER = 724;
 const WHEEL_SIZE = 340;
 const FRAME_MS = 33;
 /** Au-delà, un nouvel effet est ignoré pour ne pas ralentir les petites machines. */
@@ -314,6 +327,19 @@ async function play(message: FxMessage, limit: number) {
         scaledDuration(2200, scale),
       );
       break;
+    case "nuage":
+      await animate(
+        CLOUD_SKSL,
+        at,
+        [
+          ...common,
+          { name: "smoke", value: { x: look.smoke[0], y: look.smoke[1], z: look.smoke[2] } },
+          { name: "radius", value: dpi * STYLES.nuage.reach * scale },
+          { name: "density", value: look.density },
+        ],
+        scaledDuration(4000, scale),
+      );
+      break;
     case "soin":
       await animate(
         HEAL_SKSL,
@@ -356,9 +382,10 @@ function loadTokenAreas() {
         (item.layer === "CHARACTER" || item.layer === "MOUNT") && (role === "GM" || item.visible),
     );
     return Promise.all(
-      tokens.map(async ({ id, createdUserId, layer, zIndex }) => ({
+      tokens.map(async ({ id, name, createdUserId, layer, zIndex }) => ({
         ...(await OBR.scene.items.getItemBounds([id])),
         id,
+        name,
         owner: createdUserId,
         layer,
         zIndex,
@@ -423,15 +450,200 @@ async function markSource(point: Point, token?: TokenArea) {
   await OBR.scene.local.addItems([marker]).catch(warn);
 }
 
+/** Réglages de l'effet tiré d'une description, au point où il doit se trouver. */
+function durableSpec(entry: DurableEntry, at: Point, dpi: number) {
+  const { element, style, scale, seed, from } = entry;
+  const look = ELEMENTS[element];
+  const common = commonUniforms(element, seed, dpi * scale);
+  const radius = { name: "radius", value: dpi * STYLES[style].reach * scale };
+  switch (style) {
+    case "aura":
+    case "dome":
+      return { sksl: DURABLE_SKSL[style], position: at, uniforms: [...common, radius] };
+    case "pluie":
+      return {
+        sksl: DURABLE_SKSL.pluie,
+        position: at,
+        uniforms: [
+          ...common,
+          radius,
+          { name: "stretch", value: look.stretch },
+          { name: "fallSpeed", value: look.fallSpeed },
+        ],
+      };
+    case "nuage":
+      return {
+        sksl: DURABLE_SKSL.nuage,
+        position: at,
+        uniforms: [
+          ...common,
+          { name: "smoke", value: { x: look.smoke[0], y: look.smoke[1], z: look.smoke[2] } },
+          radius,
+          { name: "density", value: look.density },
+        ],
+      };
+    case "mur":
+      return {
+        sksl: DURABLE_SKSL.mur,
+        position: from ?? at,
+        uniforms: [
+          ...common,
+          { name: "target", value: vector(from ?? at, at) },
+          { name: "width", value: dpi * 0.32 * scale },
+          { name: "rough", value: look.rough },
+        ],
+      };
+    default:
+      return undefined;
+  }
+}
+
+async function addDurableItem(entry: DurableEntry, carriers: Map<string, Item>, dpi: number) {
+  const carrier = entry.carrier && carriers.get(entry.carrier.id);
+  // La position vient du token à cet instant : il a pu bouger depuis que l'effet a été lancé.
+  const at = carrier ? (await OBR.scene.items.getItemBounds([carrier.id])).center : entry.at;
+  const spec = durableSpec(entry, at, dpi);
+  if (!spec) return;
+  const builder = buildEffect()
+    .id(durableItemId(entry.id))
+    .effectType("VIEWPORT")
+    .sksl(spec.sksl)
+    .position(spec.position)
+    .uniforms(spec.uniforms)
+    .blendMode("SRC_OVER")
+    // Sous le brouillard de guerre, comme la météo d'Owlbear.
+    .layer("RULER")
+    .locked(true)
+    .disableHit(true);
+  if (carrier) {
+    // Il suit le token et disparaît avec lui, mais sa zone ne dépend ni de sa taille ni de sa rotation.
+    builder
+      .attachedTo(carrier.id)
+      .visible(carrier.visible)
+      .disableAttachmentBehavior(["SCALE", "ROTATION", "LOCKED"]);
+  }
+  await OBR.scene.local.addItems([builder.build()]);
+}
+
+/** Aligne les effets locaux de ce joueur sur la description partagée. */
+async function reconcileDurables() {
+  if (!(await OBR.scene.isReady())) return;
+  const [metadata, items, dpi] = await Promise.all([
+    OBR.scene.getMetadata(),
+    OBR.scene.items.getItems(),
+    OBR.scene.grid.getDpi(),
+  ]);
+  const entries = durablesIn(metadata);
+  const carriers = new Map(items.map((item) => [item.id, item]));
+  const local = await OBR.scene.local.getItems((item) =>
+    item.id.startsWith(FX_DURABLE_ITEM_PREFIX),
+  );
+  const { add, remove } = durableChanges(
+    entries,
+    local.map(({ id }) => id),
+    role,
+    (id) => carriers.has(id),
+  );
+  if (remove.length) await OBR.scene.local.deleteItems(remove);
+  await Promise.all(add.map((entry) => addDurableItem(entry, carriers, dpi)));
+  // L'effet d'un token révélé ou caché suit le changement.
+  const stale = local.filter(
+    ({ attachedTo, visible }) =>
+      attachedTo && carriers.has(attachedTo) && carriers.get(attachedTo)?.visible !== visible,
+  );
+  if (stale.length) {
+    await OBR.scene.local.updateItems(
+      stale.map(({ id }) => id),
+      (drafts) => {
+        for (const draft of drafts) {
+          const carrier = draft.attachedTo ? carriers.get(draft.attachedTo) : undefined;
+          if (carrier) draft.visible = carrier.visible;
+        }
+      },
+    );
+  }
+  // Le porteur a été supprimé : le MJ nettoie la description pour tout le monde.
+  const orphans = entries.filter(({ carrier }) => carrier && !carriers.has(carrier.id));
+  if (role === "GM" && orphans.length) await saveDurables(entries.filter((e) => !orphans.includes(e)));
+}
+
+let reconciling = false;
+let reconcileAgain = false;
+
+/** Une seule passe à la fois, sinon le même effet pourrait être créé deux fois. */
+async function scheduleReconcile() {
+  reconcileAgain = true;
+  if (reconciling) return;
+  reconciling = true;
+  while (reconcileAgain) {
+    reconcileAgain = false;
+    await reconcileDurables().catch(warn);
+  }
+  reconciling = false;
+}
+
+const saveDurables = (entries: DurableEntry[]) =>
+  OBR.scene.setMetadata({ [FX_DURABLE_KEY]: entries });
+
+/**
+ * Pose l'effet sur la carte, ou l'attache au token s'il y en a un et qu'on a la main dessus.
+ * Le même effet déjà attaché à ce token s'éteint : c'est ce qui permet de le retirer d'un clic.
+ */
+async function placeDurable(
+  choice: FxChoice,
+  label: string,
+  at: Point,
+  token: TokenArea | undefined,
+  from?: Point,
+) {
+  const carrier = token && (await canMove(token)) ? token : undefined;
+  const [metadata, multiplier] = await Promise.all([OBR.scene.getMetadata(), cellValue()]);
+  const entries = durablesIn(metadata);
+  if (carrier) {
+    const same = entries.find(
+      (entry) => entry.carrier?.id === carrier.id && sameDurable(entry, choice),
+    );
+    if (same) {
+      await saveDurables(entries.filter((entry) => entry !== same));
+      return;
+    }
+  }
+  if (entries.length >= MAX_DURABLE) {
+    await OBR.notification.show(`${MAX_DURABLE} effets durables au plus : retires-en un d'abord.`);
+    return;
+  }
+  const entry: DurableEntry = {
+    id: crypto.randomUUID(),
+    name: label,
+    element: choice.element,
+    style: choice.style,
+    scale: effectScale(choice.style, choice.size, exactCells(choice, multiplier)),
+    seed: randomSeed(),
+    at,
+    ...(from ? { from } : {}),
+    ...(carrier ? { carrier: { id: carrier.id, name: carrier.name } } : {}),
+    gmOnly: choice.gmOnly,
+    owner: OBR.player.id,
+  };
+  await saveDurables([...entries, entry]);
+}
+
 /** Sort lancé depuis la roue, le temps de viser, et l'outil à retrouver ensuite. */
 let aiming: { spell: Favorite; tool: string; mode: string | undefined } | undefined;
 
 /** Réglage à appliquer : le sort visé s'il y en a un, sinon celui du panneau. */
 function currentChoice(): FxChoice {
   const saved = loadChoice(localStorage);
-  const { element, style, size, exact } = aiming?.spell ?? saved;
+  const { element, style, size, exact, durable } = aiming?.spell ?? saved;
   // Un réglage laissé par une partie de MJ dans ce navigateur ne vaut pas pour un joueur.
-  return { element, style, size, exact, gmOnly: saved.gmOnly && role === "GM" };
+  return {
+    element,
+    style,
+    size,
+    exact,
+    durable: durable === true,
+    gmOnly: saved.gmOnly && role === "GM",
+  };
 }
 
 async function endAiming() {
@@ -446,9 +658,13 @@ async function endAiming() {
 async function castFromToken(tokenId: string, spell: Favorite) {
   const token = (await loadTokenAreas()).find(({ id }) => id === tokenId);
   if (!token) return;
-  if (castsOnSelf(spell.style)) {
-    const choice = { ...currentChoice(), ...spell };
-    send(buildMessage(choice, token.center, undefined, await cellValue(), randomSeed()));
+  if (firesFromToken(spell)) {
+    const choice = { ...currentChoice(), ...spell, durable: spell.durable === true };
+    if (isDurable(choice)) {
+      await placeDurable(choice, spell.name, token.center, token);
+    } else {
+      send(buildMessage(choice, token.center, undefined, await cellValue(), randomSeed()));
+    }
     return;
   }
   const [tool, mode] = await Promise.all([OBR.tool.getActiveTool(), OBR.tool.getActiveToolMode()]);
@@ -595,15 +811,22 @@ async function handleClick(event: ToolEvent) {
   const choice = currentChoice();
   const [token, multiplier] = await Promise.all([tokenUnderPointer(event), cellValue()]);
   const point = token?.center ?? event.pointerPosition;
+  const label = aiming?.spell.name ?? defaultSpellName(choice);
   if (!STYLES[choice.style].directed) {
     if (source) await clearSource();
-    send(buildMessage(choice, point, undefined, multiplier, randomSeed()));
+    if (isDurable(choice)) await placeDurable(choice, label, point, token);
+    else send(buildMessage(choice, point, undefined, multiplier, randomSeed()));
     await endAiming();
   } else if (!source) {
     await markSource(point, token);
   } else if (source.x === point.x && source.y === point.y) {
     // Recliquer sur le lanceur annule.
     await clearSource();
+    await endAiming();
+  } else if (isDurable(choice)) {
+    const from = source;
+    await clearSource();
+    await placeDurable(choice, label, point, undefined, from);
     await endAiming();
   } else if (choice.style === "teleportation") {
     const [from, startToken] = [source, sourceToken];
@@ -733,13 +956,21 @@ async function removeTool() {
 }
 
 let toolCreated = false;
+let toolSync = Promise.resolve();
 
-/** L'outil n'existe chez un joueur que si le MJ l'a autorisé. */
+/**
+ * L'outil n'existe chez un joueur que si le MJ l'a autorisé. Les changements passent l'un après
+ * l'autre : un retrait et une création mêlés pourraient laisser le joueur sans outil.
+ */
 function syncTool() {
-  const allowed = role === "GM" || playersAllowed;
-  if (allowed === toolCreated) return;
-  toolCreated = allowed;
-  (allowed ? createTool() : removeTool()).catch(warn);
+  toolSync = toolSync
+    .then(async () => {
+      const allowed = role === "GM" || playersAllowed;
+      if (allowed === toolCreated) return;
+      toolCreated = allowed;
+      await (allowed ? createTool() : removeTool());
+    })
+    .catch(warn);
 }
 
 const lastPlayerCast = new Map<string, number>();
@@ -772,12 +1003,18 @@ export async function setupFx() {
   });
   OBR.scene.items.onChange(() => {
     tokenAreas = undefined;
+    scheduleReconcile();
+  });
+  OBR.scene.onMetadataChange(() => scheduleReconcile());
+  OBR.scene.onReadyChange((ready) => {
+    if (ready) scheduleReconcile();
   });
   OBR.player.onChange((player) => {
     if (player.role === role) return;
     role = player.role;
     tokenAreas = undefined;
     syncTool();
+    scheduleReconcile();
   });
   OBR.room.onMetadataChange((metadata) => {
     playersAllowed = playersAllowedIn(metadata);
@@ -788,4 +1025,5 @@ export async function setupFx() {
     OBR.room.getMetadata().then(playersAllowedIn),
   ]);
   syncTool();
+  scheduleReconcile();
 }

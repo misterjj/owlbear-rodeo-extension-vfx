@@ -53,4 +53,14 @@ input:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
 .exact { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
 .exact input { width: 64px; margin-left: auto; }
 .option { display: flex; align-items: center; gap: 6px; min-height: 24px; font-size: 12px; cursor: pointer; }
+.durable { margin-top: 5px; }
+.running { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-size: 12px; }
+.running span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.running small { color: #a9adbd; }
+.running button, .stop-all {
+  all: unset; box-sizing: border-box; min-height: 24px; padding: 2px 7px; border-radius: 6px; cursor: pointer;
+  background: rgb(255 255 255 / 0.1); font-size: 12px;
+}
+.running button:hover, .stop-all:hover { background: rgb(255 255 255 / 0.2); }
+.running button:focus-visible, .stop-all:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
 .hint { margin: 2px 12px 10px; padding: 7px 8px; border-radius: 6px; background: rgb(0 0 0 / 0.22); color: #d6d9e4; font-size: 12px; }

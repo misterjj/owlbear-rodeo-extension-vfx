@@ -1,20 +1,26 @@
-import OBR from "@owlbear-rodeo/sdk";
+import OBR, { type Metadata } from "@owlbear-rodeo/sdk";
 import {
   ELEMENTS,
   ELEMENT_IDS,
+  FX_DURABLE_KEY,
   FX_PANEL_ID,
   FX_ROOM_KEY,
+  MAX_DURABLE,
   MAX_FAVORITES,
   SIZE_IDS,
   STYLES,
   STYLE_IDS,
   addFavorite,
+  canBeDurable,
+  durablesIn,
+  isDurable,
   loadChoice,
   loadFavorites,
   matchesFavorite,
   playersAllowedIn,
   saveChoice,
   saveFavorites,
+  type DurableEntry,
   type FxCast,
   type Rgb,
 } from "./fx";
@@ -26,6 +32,7 @@ let favorites = loadFavorites(localStorage);
 let isGm = false;
 let playersAllowed = false;
 let unit = "cases";
+let running: DurableEntry[] = [];
 
 const css = ([r, g, b]: Rgb) => `rgb(${r * 255} ${g * 255} ${b * 255})`;
 
@@ -33,6 +40,13 @@ const escapeHtml = (text: string) =>
   text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
 function hint() {
+  if (isDurable(choice)) {
+    const where =
+      choice.style === "mur"
+        ? "Clique sur le début du mur, puis sur sa fin."
+        : "Clique sur un token pour l'y attacher (reclique pour l'éteindre), ou sur la carte pour l'y poser.";
+    return choice.gmOnly ? `${where} Caché aux joueurs.` : where;
+  }
   if (choice.gmOnly) {
     return choice.style === "teleportation"
       ? "MJ seulement : les joueurs ne voient rien et le token ne bouge pas."
@@ -85,6 +99,54 @@ function exactRow() {
     </label>`;
 }
 
+function durableRow() {
+  if (!canBeDurable(choice.style)) return "";
+  return `<label class="option durable"><input id="durable" type="checkbox" ${choice.durable ? "checked" : ""} /> Durable : reste jusqu'à ce qu'on le retire</label>`;
+}
+
+function runningList() {
+  if (!running.length) return "";
+  return `
+    <section>
+      <h2>Effets durables (${running.length}/${MAX_DURABLE})</h2>
+      ${running
+        .map(
+          ({ id, name, carrier }) => `
+            <div class="running">
+              <span>${escapeHtml(name)} <small>${carrier ? `sur ${escapeHtml(carrier.name)}` : "sur la carte"}</small></span>
+              <button type="button" data-stop="${escapeHtml(id)}" aria-label="Retirer ${escapeHtml(name)}" title="Retirer">✕</button>
+            </div>`,
+        )
+        .join("")}
+      ${running.length > 1 ? `<button type="button" class="stop-all" id="stop-all">Tout retirer</button>` : ""}
+    </section>`;
+}
+
+const warn = (error: unknown) => console.warn("Effets :", error);
+
+/** Retire de la liste à jour : un autre joueur a pu y toucher depuis son affichage. */
+async function stopDurables(ids: string[]) {
+  const entries = durablesIn(await OBR.scene.getMetadata());
+  await OBR.scene.setMetadata({ [FX_DURABLE_KEY]: entries.filter(({ id }) => !ids.includes(id)) });
+}
+
+/** La liste change sans redessiner le reste du panneau, où un champ peut être en cours de saisie. */
+function renderRunning() {
+  const container = app.querySelector<HTMLDivElement>("#running");
+  if (!container) return;
+  container.innerHTML = runningList();
+  container.querySelectorAll<HTMLButtonElement>("[data-stop]").forEach((element) => {
+    element.onclick = () => stopDurables([element.dataset.stop!]).catch(warn);
+  });
+  const stopAll = container.querySelector<HTMLButtonElement>("#stop-all");
+  if (stopAll) stopAll.onclick = () => stopDurables(running.map(({ id }) => id)).catch(warn);
+}
+
+function readRunning(metadata: Metadata) {
+  running = durablesIn(metadata).filter(({ owner }) => isGm || owner === OBR.player.id);
+  renderRunning();
+}
+
 function optionsSection() {
   if (!isGm) return "";
   return `
@@ -122,6 +184,7 @@ function render() {
       <div class="choices styles">
         ${STYLE_IDS.map((id) => button("style", id, STYLES[id].label, STYLES[id].label)).join("")}
       </div>
+      ${durableRow()}
     </section>
     <section>
       <h2>Taille</h2>
@@ -130,6 +193,7 @@ function render() {
       </div>
       ${exactRow()}
     </section>
+    <div id="running"></div>
     ${optionsSection()}
     <p class="hint" id="hint">${hint()}</p>`;
 
@@ -145,8 +209,9 @@ function render() {
   });
   app.querySelectorAll<HTMLButtonElement>("[data-favorite]").forEach((element) => {
     element.onclick = () => {
-      const { element: fxElement, style, size, exact } = favorites[Number(element.dataset.favorite)];
-      update({ element: fxElement, style, size, exact });
+      const { element: fxElement, style, size, exact, durable } =
+        favorites[Number(element.dataset.favorite)];
+      update({ element: fxElement, style, size, exact, durable: durable === true });
       render();
     };
   });
@@ -178,6 +243,14 @@ function render() {
       });
     };
   }
+  const durable = app.querySelector<HTMLInputElement>("#durable");
+  if (durable) {
+    durable.onchange = () => {
+      update({ durable: durable.checked });
+      render();
+    };
+  }
+  renderRunning();
   const gmOnly = app.querySelector<HTMLInputElement>("#gm-only");
   if (gmOnly) {
     gmOnly.onchange = () => {
@@ -190,7 +263,7 @@ function render() {
     players.onchange = () => {
       playersAllowed = players.checked;
       OBR.room.setMetadata({ [FX_ROOM_KEY]: { players: players.checked } }).catch((error) => {
-        console.warn("Effets :", error);
+        warn(error);
         playersAllowed = !players.checked;
         players.checked = playersAllowed;
       });
@@ -206,6 +279,10 @@ OBR.onReady(async () => {
     await OBR.popover.close(FX_PANEL_ID);
     return;
   }
-  if (await OBR.scene.isReady()) unit = (await OBR.scene.grid.getScale()).parsed.unit || unit;
+  if (await OBR.scene.isReady()) {
+    unit = (await OBR.scene.grid.getScale()).parsed.unit || unit;
+    readRunning(await OBR.scene.getMetadata());
+  }
+  OBR.scene.onMetadataChange(readRunning);
   render();
 });
