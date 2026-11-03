@@ -94,7 +94,8 @@ function animate(sksl: string, position: Point, uniforms: Uniform[], duration: n
       .position(position)
       .uniforms([{ name: "t", value: 0 }, ...uniforms])
       .blendMode("SRC_OVER")
-      .layer("POINTER")
+      // Sous le brouillard de guerre : un effet dans une zone cachée ne doit rien trahir.
+      .layer("RULER")
       .locked(true)
       .disableHit(true)
       .build();

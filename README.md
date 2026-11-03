@@ -55,8 +55,8 @@ Une téléportation qui part d'un token le déplace, calé sur la grille. Partie
 de la carte, elle reste purement visuelle.
 
 Si le panneau a été fermé, le bouton **Réglages** de l'outil le rouvre.
-Un clic sur un token vise son centre. Les joueurs n'ont rien à installer, mais un effet
-se voit même sous le brouillard de guerre.
+Un clic sur un token vise son centre. Les joueurs n'ont rien à installer, et un effet
+reste caché sous le brouillard de guerre.
 
 ## Développement
 
