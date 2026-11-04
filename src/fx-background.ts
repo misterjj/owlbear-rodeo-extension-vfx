@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import OBR, {
   buildCurve,
   buildEffect,
@@ -899,7 +900,7 @@ async function placeDurable(
     }
   }
   if (entries.length >= durableLimit) {
-    await OBR.notification.show(`${durableLimit} effets durables au plus : retires-en un d'abord, ou change la limite dans Réglages.`);
+    await OBR.notification.show(t("running.limit", { limit: durableLimit }));
     return;
   }
   const entry: DurableEntry = {
@@ -994,7 +995,7 @@ async function openWheel(tokenId: string) {
   const token = (await loadTokenAreas()).find(({ id }) => id === tokenId);
   if (!token) return;
   if (!(await canMove(token))) {
-    await OBR.notification.show("Tu n'as pas la main sur ce token.");
+    await OBR.notification.show(t("wheel.notYoursAny"));
     return;
   }
   const { left, top } = await viewportPosition(token.center);
@@ -1226,12 +1227,12 @@ async function createTool() {
   // L'outil ne se montre que pendant qu'il sert : on y entre par le menu Effets, en haut à gauche.
   await OBR.tool.create({
     id: FX_TOOL_ID,
-    icons: [{ icon: "/vfx/outil.svg", label: "Effets", filter: whenActive }],
+    icons: [{ icon: "/vfx/outil.svg", label: t("app.title"), filter: whenActive }],
     defaultMode: MODE_ID,
   });
   await OBR.tool.createMode({
     id: MODE_ID,
-    icons: [{ icon: "/vfx/outil.svg", label: "Lancer un effet", filter: whenActive }],
+    icons: [{ icon: "/vfx/outil.svg", label: t("tool.label"), filter: whenActive }],
     cursors: [{ cursor: "crosshair" }],
     onToolClick(_context, event) {
       handleClick(event).catch(warn);
@@ -1263,7 +1264,7 @@ async function createTool() {
     icons: [
       {
         icon: "/vfx/roue.svg",
-        label: "Sorts",
+        label: t("wheel.menu"),
         filter: {
           max: 1,
           // Les filtres d'une liste s'additionnent : sans « || », aucun objet ne serait sur les deux calques.
@@ -1294,6 +1295,17 @@ async function removeTool() {
   await OBR.contextMenu.remove(MENU_ID);
   await OBR.tool.removeMode(MODE_ID);
   await OBR.tool.remove(FX_TOOL_ID);
+}
+
+/** Le nom du bouton et les libellés enregistrés auprès d'Owlbear ne suivent pas tout seuls. */
+async function applyLanguage() {
+  await OBR.action.setTitle(t("app.title"));
+  if (!toolCreated) return;
+  toolSync = toolSync.then(async () => {
+    await removeTool();
+    await createTool();
+  }).catch(warn);
+  await toolSync;
 }
 
 let toolCreated = false;
@@ -1334,6 +1346,7 @@ export async function setupFx() {
   OBR.broadcast.onMessage(FX_UI_CHANNEL, ({ data }) => {
     const type = (data as { type?: string } | null)?.type;
     if (type === "arm") arm().catch(warn);
+    else if (type === "language") applyLanguage().catch(warn);
     else if (type === "disarm") disarm().catch(warn);
   });
   // Le menu refermé, la carte reprend son outil et les repères d'un programme en cours disparaissent.
@@ -1386,5 +1399,6 @@ export async function setupFx() {
   playersAllowed = playersAllowedIn(room);
   durableLimit = limitsIn(room).durable;
   syncTool();
+  OBR.action.setTitle(t("app.title")).catch(warn);
   scheduleReconcile();
 }

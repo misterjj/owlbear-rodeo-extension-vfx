@@ -1,94 +1,105 @@
-# Effets visuels pour Owlbear Rodeo
+# Visual Effects for Owlbear Rodeo
 
-Le MJ, et les joueurs s'il les y autorise, lancent des effets animés sur la carte, visibles par toute la salle.
-Ils sont calculés par la carte graphique : il n'y a aucune image à fournir.
+The GM, and players if the GM allows it, cast animated effects on the map, visible to the whole room.
+They are computed by the graphics card, so there are no images to provide.
 
-## Utilisation
+## Usage
 
-Clique sur **Effets**, dans le menu en haut à gauche d'Owlbear. La fenêtre a trois onglets : **Lancer**,
-**Programmes** et **Réglages** (les deux derniers pour le MJ). L'onglet **Lancer** prend la main sur la
-carte dès qu'on y arrive : choisis l'élément, le style et la taille, puis clique sur la carte. Le dernier choix est conservé. Élément et style s'ouvrent d'un clic, un à la fois ; le reste (zone exacte, durable, roue, effets durables) est replié avec son résumé.
+Click **Effects** in Owlbear's top-left menu. The window has three tabs: **Cast**, **Programs** and
+**Settings**. Programs is for the GM only, and players only see the language in Settings.
 
-- **Élément :** feu, glace, foudre, poison, acide, ténèbres, lumière, force, nécrotique, psychique,
-  tonnerre, physique, sang, eau, terre, vent ;
-- **Style :**
-  - coup, griffes, morsure, explosion, météore, pluie, dôme, cube, nuage, aura, transformation et soin se lancent d'un clic sur la carte ;
-  - flèche, projectile, rayon, cône, mur et téléportation demandent deux clics : le point de départ,
-    puis la cible ou la direction (`Échap` pour annuler) ;
-  - chaîne part du lanceur, puis saute à chaque nouvelle cible cliquée (`Échap` pour finir) ;
-- **Taille :** XS, S, M, L ou XL. Pour un sort de zone (explosion, météore, pluie, dôme, cube, nuage, aura, transformation, soin,
-  cône), un rayon, une longueur ou un côté exact se donne dans l'unité de la scène.
+The **Cast** tab takes over the map as soon as you open it: choose the element, style and size, then click
+the map. Your last choice is kept. Element and style open with a click, one at a time. Everything else
+(exact area, lasting, wheel, lasting effects) stays folded, with a summary.
 
-Le bouton **–** réduit la fenêtre à l'essentiel : l'effet en cours, les favoris pour en changer et les
-effets durables ; l'onglet Programmes se limite à une liste qui active ou désactive. Si tu prends un autre
-outil, un message le signale et **Reprendre** rend la main à l'onglet. Fermer la fenêtre rend l'outil d'avant.
+- **Element:** fire, ice, lightning, poison, acid, darkness, light, force, necrotic, psychic, thunder,
+  physical, blood, water, earth, wind.
+- **Style:**
+  - strike, claws, bite, explosion, meteor, rain, dome, cube, cloud, aura, transformation and healing are
+    cast with one click on the map;
+  - arrow, projectile, beam, cone, wall and teleport take two clicks: the starting point, then the target
+    or direction (`Escape` to cancel);
+  - chain starts from the caster, then jumps to each new target you click (`Escape` to finish).
+- **Size:** XS, S, M, L or XL. For area spells (explosion, meteor, rain, dome, cube, cloud, aura,
+  transformation, healing, cone), an exact radius, length or side can be given in the scene's unit.
 
-Un cube lancé depuis un token peut être **au centre** ou **sur une face**, comme pour *Vague tonnante* :
-sur une face, un second clic choisit la direction, n'importe où autour du token : le cube se colle à lui
-et lui fait face. Attaché, il le suit sans changer d'orientation. Sur la carte, il reste centré sur le clic.
+The **–** button shrinks the window to the essentials: the current effect, favorites to switch to, and
+lasting effects. In the Programs tab, it becomes a list that turns programs on and off. If you pick another
+tool, a message says so and **Resume** gives control back to the tab. Closing the window restores your
+previous tool.
 
-Un contour montre la zone touchée avant de lancer. Les **favoris** enregistrent un réglage sous un
-nom, dans ce navigateur ; reprendre un nom existant le remplace.
+A cube cast from a token can be **centered** or **on a face**, as with *Thunderwave*. On a face, a second
+click picks the direction, anywhere around the token: the cube sits against the token and faces it. When
+attached, it follows the token without changing its orientation. On the map, it stays centered on the click.
 
-## Effets durables
+An outline shows the affected area before casting. **Favorites** save a setup under a name, in this browser.
+Reusing an existing name replaces it.
 
-Aura, transformation, pluie, dôme, cube, nuage et mur peuvent durer : coche **Durable** dans le panneau. L'effet reste alors
-jusqu'à ce qu'on le retire, et se voit aussi pour ceux qui arrivent en cours de partie.
+## Lasting effects
 
-- Un clic sur un token l'y attache : il le suit et disparaît avec lui. Un nouveau clic l'éteint.
-- Un clic sur la carte l'y pose. Un mur se trace en deux clics et reste toujours sur la carte.
-- La liste **Effets durables** du panneau retire chacun d'eux, ou tous d'un coup (10 au plus par scène par défaut).
+Aura, transformation, rain, dome, cube, cloud and wall can last: check **Lasting** in **More options**. The
+effect then stays until removed, and is also visible to people who join during the game.
 
-Un sort durable de la roue s'allume et s'éteint d'un clic sur son bouton. Un nuage de ténèbres est
-presque opaque, y compris pour le MJ. Avec **Visible par le MJ seulement**, les joueurs ne le reçoivent
-pas à l'écran. Ces effets ne connaissent pas les murs et ne changent rien aux règles de vision.
+- Clicking a token attaches it: it follows the token and disappears with it. Clicking again turns it off.
+- Clicking the map places it there. A wall is drawn with two clicks and always stays on the map.
+- The **Lasting effects** list removes them one by one or all at once (10 per scene at most by default).
 
-## Programmes
+A lasting spell on the wheel turns on and off with a click on its sector. A darkness cloud is almost opaque,
+even for the GM. With **Visible to the GM only**, players do not get it on their screen. These effects ignore
+walls and do not change vision rules.
 
-Un programme relance un effet tout seul, tant qu'il est actif : un canon qui tire toutes les 3
-secondes, ou des éclairs entre deux poteaux à intervalle variable. L'onglet **Programmes** les liste
-(10 au plus par scène par défaut). Chaque ligne se lance ou s'arrête avec ▶ et ■, et un groupe entier avec **▶ Tout** et **■ Tout**.
+## Programs
 
-- **Effet :** élément, style, taille ou zone exacte.
-- **Rythme :** intervalle minimum et maximum, décalage du premier tir, nombre de tirs (vide : sans fin).
-- **Points :** des positions sur la carte ou des tokens, placés d'un clic. ▲ et ▼ changent leur ordre, et leur numéro s'affiche sur la carte pendant l'édition. Un effet dirigé va du premier
-  au second ; avec plus de deux points, ou pour un effet de zone, le point est tiré au hasard. Une
-  **chaîne** parcourt au contraire tous ses points dans l'ordre : c'est un seul tir, et l'intervalle
-  compte à partir de sa fin. Un token caché ou supprimé est sauté.
-- **Groupes :** ils s'activent ou se désactivent d'un coup. Les programmes activés ensemble partagent le
-  même départ, ce qui permet de les faire alterner avec le décalage.
+A program recasts an effect on its own while it is active: a cannon firing every 3 seconds, or lightning
+between two posts at varying intervals. The **Programs** tab lists them (10 per scene at most by default).
+Each row starts or stops with ▶ and ■, and a whole group with **▶ All** and **■ All**.
 
-Seul le MJ les gère, et il voit un repère sur les points des programmes inactifs. Un tir ne part que
-d'un point visible : un token caché ou supprimé l'annule. C'est uniquement visuel. Les effets lancés à
-la main restent prioritaires.
+- **Effect:** element, style, size or exact area.
+- **Timing:** minimum and maximum interval, first shot offset, number of shots (empty: endless).
+- **Points:** map positions or tokens, placed with a click. ▲ and ▼ change their order, and their number shows
+  on the map while editing. A directed effect goes from the first point to the second. With more than two
+  points, or for an area effect, the point is picked at random. A **chain**, however, goes through all its
+  points in order: this counts as one shot, and the interval counts from its end. A hidden or deleted token
+  is skipped.
+- **Groups:** they turn on or off all at once. Programs activated together share the same start, so an offset
+  makes them alternate.
 
-## Sorts d'un token
+Only the GM manages them, and sees a marker on the points of inactive programs. A shot only fires from a
+visible point: a hidden or deleted token cancels it. Programs are purely visual. Effects cast by hand always
+take priority.
 
-Chaque token peut garder jusqu'à 8 sorts, présentés sur une roue autour de lui.
+## Token spells
 
-**Pendant la partie :** clique sur le token avec l'outil de sélection, puis sur **Sorts** dans son menu. Un
-clic sur un sort le lance. Aura, transformation, soin, dôme et les sorts durables autres que le mur partent
-aussitôt du token ; les autres attendent un clic pour viser, puis tu retrouves ton outil (`Échap` pour annuler).
+Each token can keep up to 8 spells, shown on a wheel around it.
 
-**Pour la préparer :** sélectionne le token, ou utilise **Choisir un token sur la carte**, dans l'onglet
-**Lancer**. La section **Roue de…** liste ses sorts, que tu modifies avec ✎ ou retires avec ✕. **+ Ajouter à la
-roue** y met l'effet réglé juste au-dessus. Les sorts sont enregistrés sur le token : ils le suivent et servent
-à tous ceux qui ont la main dessus.
+**During play:** click the token with the select tool, then **Spells** in its menu. Clicking a spell casts it.
+Aura, transformation, healing, dome and lasting spells other than walls fire from the token at once. The others
+wait for a click to aim, then you get your tool back (`Escape` to cancel).
 
-## Réglages du MJ
+**To prepare it:** select the token, or use **Choose a token on the map**, in the **Cast** tab. The **Wheel**
+section lists its spells, which you edit with ✎ or remove with ✕. **+ Add** puts the effect set above on the
+wheel. Spells are saved on the token: they follow it and work for anyone who controls it.
 
-- **Visible par le MJ seulement :** les joueurs ne voient rien et une téléportation ne bouge pas le token ;
-- **Limites par scène :** 10 effets durables et 10 programmes par défaut, de 1 à 100. Un avertissement rappelle le coût : un effet durable sollicite en continu la carte graphique de chaque joueur.
-- **Les joueurs peuvent lancer des effets :** l'outil apparaît chez eux, pour toute la salle. Ils ne
-  déplacent par téléportation que les tokens qu'Owlbear les laisse déplacer à la main.
+## GM settings
 
-Une téléportation qui part d'un token le déplace, calé sur la grille. Partie d'un autre point
-de la carte, elle reste purement visuelle.
+- **Visible to the GM only:** players see nothing and a teleport does not move the token.
+- **Players can cast effects:** they get the Cast tab for the whole room. They can only teleport tokens that
+  Owlbear lets them move by hand.
+- **Limits per scene:** 10 lasting effects and 10 programs by default, from 1 to 100. A warning explains the
+  cost: a lasting effect continuously uses every player's graphics card.
 
-Un clic sur un token vise son centre. Les joueurs n'ont rien à installer, et un effet
-reste caché sous le brouillard de guerre.
+A teleport starting from a token moves it, snapped to the grid. Starting from any other point on the map, it
+is purely visual.
 
-## Développement
+Clicking a token aims at its center. Players have nothing to install, and effects stay hidden under fog of war.
+
+## Language
+
+The interface is available in English and French. It follows the browser's language, and each player can
+change it in **Settings**. Names given to spells and favorites stay as written. To add a language, add a
+dictionary in `src/i18n.ts`.
+
+## Development
 
 ```sh
 pnpm install
@@ -96,23 +107,22 @@ pnpm test
 pnpm dev
 ```
 
-Pour essayer seul dans Owlbear Rodeo, ajoute l'extension personnalisée
-`http://localhost:5174/manifest.json`, puis active-la dans la salle. Les autres
-participants ne peuvent pas charger une adresse `localhost`.
+To try it on your own in Owlbear Rodeo, add the custom extension `http://localhost:5174/manifest.json`, then
+enable it in the room. Other participants cannot load a `localhost` address.
 
-## Mise en ligne (Cloudflare Pages, gratuit)
+## Deployment (Cloudflare Pages, free)
 
-La première fois seulement :
+First time only:
 
 ```sh
 npx wrangler pages project create vfx-owlbear --production-branch master
 ```
 
-Puis, à chaque version :
+Then, for each version:
 
 ```sh
 pnpm run deploy
 ```
 
-Le manifest est alors à l'adresse `https://vfx-owlbear.pages.dev/manifest.json`, ou à
-l'adresse affichée par la commande si ce nom est déjà pris.
+The manifest is then at `https://vfx-owlbear.pages.dev/manifest.json`, or at the address shown by the command
+if that name is already taken.

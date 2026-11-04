@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import {
   CHAIN_HOP_MS,
   ELEMENTS,
@@ -124,12 +125,12 @@ export const anchorsNeeded = (style: StyleId) => (STYLES[style].directed ? 2 : 1
 
 /** Ce qui empêche d'enregistrer ce programme, ou rien s'il est complet. */
 export function programProblem({ name, style, anchors }: Pick<Program, "name" | "style" | "anchors">) {
-  if (!name.trim()) return "Donne un nom au programme.";
+  if (!name.trim()) return t("program.needName");
   const needed = anchorsNeeded(style);
   if (anchors.length >= needed) return undefined;
   return needed === 1
-    ? "Ajoute au moins un point sur la carte."
-    : "Ajoute au moins deux points : le départ et l'arrivée.";
+    ? t("program.needOne")
+    : t("program.needTwo");
 }
 
 /**

@@ -1,5 +1,6 @@
-import { ELEMENTS, ELEMENT_IDS, SIZE_IDS, STYLES, STYLE_GROUPS, readableColor, type ElementId, type FxCast, type Rgb, type StyleId } from "./fx";
+import { ELEMENTS, ELEMENT_IDS, SIZE_IDS, STYLE_GROUPS, elementLabel, readableColor, styleLabel, type ElementId, type FxCast, type Rgb, type StyleId } from "./fx";
 import { styleIcon } from "./fx-icons";
+import { t } from "./i18n";
 
 /** Éléments de formulaire communs aux onglets Lancer et Programmes. */
 const css = ([r, g, b]: Rgb) => `rgb(${r * 255} ${g * 255} ${b * 255})`;
@@ -26,23 +27,24 @@ export function pickerRow(id: PickerId, label: string, value: string, open: bool
     </button>`;
 }
 
-export const elementValue = (element: ElementId) => `${swatch(element)}${ELEMENTS[element].label}`;
+export const elementValue = (element: ElementId) => `${swatch(element)}${elementLabel(element)}`;
 
 export function elementGrid(selected: ElementId) {
   return `
     <div class="grid">
-      ${ELEMENT_IDS.map((id) => choiceButton("element", id, `${swatch(id)}<span>${ELEMENTS[id].label}</span>`, ELEMENTS[id].label, id === selected)).join("")}
+      ${ELEMENT_IDS.map((id) => choiceButton("element", id, `${swatch(id)}<span>${elementLabel(id)}</span>`, elementLabel(id), id === selected)).join("")}
     </div>`;
 }
 
-const SHORT_LABELS: Partial<Record<StyleId, string>> = { transformation: "Transfo.", teleportation: "Téléport." };
+const shortLabel = (id: StyleId) =>
+  id === "transformation" || id === "teleportation" ? t(`styleShort.${id}`) : styleLabel(id);
 
 export function styleGrid(selected: StyleId) {
   return STYLE_GROUPS.map(
     ({ label, styles }) => `
-      <h3>${label}</h3>
+      <h3>${t(label)}</h3>
       <div class="grid">
-        ${styles.map((id) => choiceButton("style", id, `${styleIcon(id)}<span>${SHORT_LABELS[id] ?? STYLES[id].label}</span>`, STYLES[id].label, id === selected)).join("")}
+        ${styles.map((id) => choiceButton("style", id, `${styleIcon(id)}<span>${shortLabel(id)}</span>`, styleLabel(id), id === selected)).join("")}
       </div>`,
   ).join("");
 }
@@ -50,6 +52,6 @@ export function styleGrid(selected: StyleId) {
 export function sizeRow(selected: string, off: boolean) {
   return `
     <div class="choices sizes ${off ? "off" : ""}" id="sizes">
-      ${SIZE_IDS.map((id) => choiceButton("size", id, id, `Taille ${id}`, id === selected)).join("")}
+      ${SIZE_IDS.map((id) => choiceButton("size", id, id, t("field.sizeValue", { size: id }), id === selected)).join("")}
     </div>`;
 }

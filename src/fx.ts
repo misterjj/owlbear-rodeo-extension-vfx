@@ -1,3 +1,4 @@
+import { t, type TextKey } from "./i18n";
 const PLUGIN_ID = "vfx-owlbear";
 
 export const FX_CHANNEL = `${PLUGIN_ID}/effets`;
@@ -26,7 +27,6 @@ const FAVORITES_KEY = "vfx:favoris";
 export type Rgb = readonly [number, number, number];
 
 export interface ElementLook {
-  label: string;
   /** Couleurs froide, moyenne et chaude. */
   palette: readonly [Rgb, Rgb, Rgb];
   smoke: Rgb;
@@ -51,7 +51,6 @@ export interface ElementLook {
 
 export const ELEMENTS = {
   feu: {
-    label: "Feu",
     palette: [[0.35, 0.03, 0], [1, 0.33, 0.02], [1, 0.9, 0.55]],
     smoke: [0.07, 0.06, 0.06],
     rough: 1,
@@ -65,7 +64,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   glace: {
-    label: "Glace",
     palette: [[0.05, 0.2, 0.5], [0.25, 0.65, 0.95], [0.88, 0.98, 1]],
     smoke: [0.72, 0.84, 0.95],
     rough: 1.5,
@@ -79,7 +77,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   foudre: {
-    label: "Foudre",
     palette: [[0.15, 0.1, 0.55], [0.45, 0.45, 1], [0.93, 0.96, 1]],
     smoke: [0.1, 0.1, 0.26],
     rough: 2,
@@ -93,7 +90,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   poison: {
-    label: "Poison",
     palette: [[0.22, 0.05, 0.32], [0.3, 0.65, 0.2], [0.72, 0.95, 0.35]],
     smoke: [0.17, 0.3, 0.1],
     rough: 0.8,
@@ -107,7 +103,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   acide: {
-    label: "Acide",
     palette: [[0.3, 0.35, 0], [0.72, 0.82, 0.05], [0.97, 1, 0.5]],
     smoke: [0.33, 0.38, 0.05],
     rough: 1.2,
@@ -121,7 +116,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   tenebres: {
-    label: "Ténèbres",
     palette: [[0.02, 0, 0.04], [0.16, 0.03, 0.28], [0.5, 0.22, 0.78]],
     smoke: [0.02, 0.01, 0.04],
     rough: 1,
@@ -135,7 +129,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   lumiere: {
-    label: "Lumière",
     palette: [[0.72, 0.45, 0.05], [1, 0.82, 0.3], [1, 1, 0.9]],
     smoke: [0.95, 0.88, 0.58],
     rough: 0.9,
@@ -149,7 +142,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   force: {
-    label: "Force",
     palette: [[0.16, 0.05, 0.6], [0.52, 0.28, 1], [0.9, 0.86, 1]],
     smoke: [0.3, 0.2, 0.7],
     rough: 0.6,
@@ -163,7 +155,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   necrotique: {
-    label: "Nécrotique",
     palette: [[0.02, 0.05, 0.03], [0.22, 0.36, 0.2], [0.62, 0.8, 0.52]],
     smoke: [0.03, 0.05, 0.03],
     rough: 1.1,
@@ -177,7 +168,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   psychique: {
-    label: "Psychique",
     palette: [[0.35, 0.02, 0.38], [1, 0.25, 0.7], [1, 0.84, 0.96]],
     smoke: [0.5, 0.15, 0.5],
     rough: 0.8,
@@ -191,7 +181,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   tonnerre: {
-    label: "Tonnerre",
     palette: [[0.5, 0.64, 0.84], [0.76, 0.86, 0.97], [0.97, 0.99, 1]],
     smoke: [0.62, 0.7, 0.8],
     rough: 1.3,
@@ -205,7 +194,6 @@ export const ELEMENTS = {
     sonic: 1,
   },
   physique: {
-    label: "Physique",
     palette: [[0.22, 0.22, 0.25], [0.62, 0.62, 0.67], [0.97, 0.97, 0.99]],
     smoke: [0.38, 0.34, 0.29],
     rough: 1.4,
@@ -219,7 +207,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   sang: {
-    label: "Sang",
     palette: [[0.2, 0, 0.01], [0.62, 0.02, 0.05], [0.95, 0.2, 0.16]],
     smoke: [0.28, 0.01, 0.02],
     rough: 1.5,
@@ -233,7 +220,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   eau: {
-    label: "Eau",
     palette: [[0, 0.14, 0.4], [0.05, 0.42, 0.82], [0.76, 0.93, 1]],
     smoke: [0.6, 0.78, 0.92],
     rough: 0.9,
@@ -247,7 +233,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   terre: {
-    label: "Terre",
     palette: [[0.16, 0.09, 0.04], [0.47, 0.3, 0.14], [0.8, 0.65, 0.4]],
     smoke: [0.42, 0.32, 0.2],
     rough: 1.8,
@@ -261,7 +246,6 @@ export const ELEMENTS = {
     sonic: 0,
   },
   vent: {
-    label: "Vent",
     palette: [[0.45, 0.62, 0.62], [0.74, 0.9, 0.87], [0.97, 1, 1]],
     smoke: [0.8, 0.88, 0.88],
     rough: 0.7,
@@ -282,25 +266,25 @@ export const ELEMENTS = {
  * `exactZone` : la zone peut être donnée dans l'unité de la scène, comme dans la description d'un sort.
  */
 export const STYLES = {
-  coup: { label: "Coup", directed: false, reach: 0.9, exactZone: false },
-  griffes: { label: "Griffes", directed: false, reach: 0.9, exactZone: false },
-  morsure: { label: "Morsure", directed: false, reach: 0.9, exactZone: false },
-  fleche: { label: "Flèche", directed: true, reach: 0, exactZone: false },
-  projectile: { label: "Projectile", directed: true, reach: 0, exactZone: false },
-  rayon: { label: "Rayon", directed: true, reach: 0, exactZone: false },
-  chaine: { label: "Chaîne", directed: true, reach: 0, exactZone: false },
-  cone: { label: "Cône", directed: true, reach: 5, exactZone: true },
-  explosion: { label: "Explosion", directed: false, reach: 2.5, exactZone: true },
-  meteore: { label: "Météore", directed: false, reach: 2.5, exactZone: true },
-  pluie: { label: "Pluie", directed: false, reach: 3, exactZone: true },
-  mur: { label: "Mur", directed: true, reach: 0, exactZone: false },
-  dome: { label: "Dôme", directed: false, reach: 2.5, exactZone: true },
-  cube: { label: "Cube", directed: false, reach: 4, exactZone: true },
-  nuage: { label: "Nuage", directed: false, reach: 2.5, exactZone: true },
-  aura: { label: "Aura", directed: false, reach: 1.5, exactZone: true },
-  transformation: { label: "Transformation", directed: false, reach: 1.2, exactZone: true },
-  soin: { label: "Soin", directed: false, reach: 1, exactZone: true },
-  teleportation: { label: "Téléportation", directed: true, reach: 0, exactZone: false },
+  coup: { directed: false, reach: 0.9, exactZone: false },
+  griffes: { directed: false, reach: 0.9, exactZone: false },
+  morsure: { directed: false, reach: 0.9, exactZone: false },
+  fleche: { directed: true, reach: 0, exactZone: false },
+  projectile: { directed: true, reach: 0, exactZone: false },
+  rayon: { directed: true, reach: 0, exactZone: false },
+  chaine: { directed: true, reach: 0, exactZone: false },
+  cone: { directed: true, reach: 5, exactZone: true },
+  explosion: { directed: false, reach: 2.5, exactZone: true },
+  meteore: { directed: false, reach: 2.5, exactZone: true },
+  pluie: { directed: false, reach: 3, exactZone: true },
+  mur: { directed: true, reach: 0, exactZone: false },
+  dome: { directed: false, reach: 2.5, exactZone: true },
+  cube: { directed: false, reach: 4, exactZone: true },
+  nuage: { directed: false, reach: 2.5, exactZone: true },
+  aura: { directed: false, reach: 1.5, exactZone: true },
+  transformation: { directed: false, reach: 1.2, exactZone: true },
+  soin: { directed: false, reach: 1, exactZone: true },
+  teleportation: { directed: true, reach: 0, exactZone: false },
 } as const;
 
 /** La taille M est la référence. */
@@ -309,6 +293,9 @@ export const SIZES = { XS: 0.4, S: 0.65, M: 1, L: 1.6, XL: 2.4 } as const;
 export type ElementId = keyof typeof ELEMENTS;
 export type StyleId = keyof typeof STYLES;
 export type SizeId = keyof typeof SIZES;
+
+export const elementLabel = (element: ElementId) => t(`element.${element}`);
+export const styleLabel = (style: StyleId) => t(`style.${style}`);
 
 export const ELEMENT_IDS = Object.keys(ELEMENTS) as ElementId[];
 export const STYLE_IDS = Object.keys(STYLES) as StyleId[];
@@ -505,7 +492,7 @@ export function coneTarget(from: Point, at: Point, length: number): Point {
 
 /** Ce que vaut le nombre saisi. Une échelle sans unité qui n'est pas de 1 ne compte pas en cases. */
 export const unitLabel = ({ multiplier, unit }: { multiplier: number; unit: string }) =>
-  unit || (multiplier === 1 ? "cases" : "unités");
+  unit || t(multiplier === 1 ? "unit.cells" : "unit.units");
 
 /** Zone demandée en cases, si elle s'applique à ce style. */
 export function exactCells(choice: FxChoice, multiplier: number) {
@@ -605,7 +592,7 @@ const CONE_HALF_ANGLE = Math.atan(0.5);
 /** Contour montré sous le pointeur avant de lancer, ou rien si le lanceur manque encore. */
 /** Ce que mesure la zone exacte de ce style, tel qu'une description de sort l'indique. */
 export const exactZoneLabel = (style: StyleId) =>
-  style === "cone" ? "Longueur" : style === "cube" ? "Côté" : "Rayon";
+  t(style === "cone" ? "zone.length" : style === "cube" ? "zone.side" : "zone.radius");
 
 export function previewOutline(
   style: StyleId,
@@ -706,7 +693,7 @@ export function editSpell(spells: Favorite[], index: number, changes: Favorite):
 }
 
 export const defaultSpellName = ({ element, style }: FxCast) =>
-  `${STYLES[style].label} · ${ELEMENTS[element].label}`;
+  `${styleLabel(style)} · ${elementLabel(element)}`;
 
 /** Ces styles partent du token sans qu'il y ait à viser. */
 export const castsOnSelf = (style: StyleId) =>
@@ -796,11 +783,11 @@ export function readableColor([r, g, b]: Rgb): Rgb {
 }
 
 /** Regroupement des styles dans l'onglet Lancer. */
-export const STYLE_GROUPS: { label: string; styles: StyleId[] }[] = [
-  { label: "Corps à corps", styles: ["coup", "griffes", "morsure"] },
-  { label: "À distance", styles: ["fleche", "projectile", "rayon", "chaine"] },
-  { label: "Zones", styles: ["explosion", "meteore", "cone", "mur", "dome", "cube", "pluie", "nuage"] },
-  { label: "Sur soi", styles: ["aura", "transformation", "soin", "teleportation"] },
+export const STYLE_GROUPS: { label: TextKey; styles: StyleId[] }[] = [
+  { label: "group.melee", styles: ["coup", "griffes", "morsure"] },
+  { label: "group.ranged", styles: ["fleche", "projectile", "rayon", "chaine"] },
+  { label: "group.areas", styles: ["explosion", "meteore", "cone", "mur", "dome", "cube", "pluie", "nuage"] },
+  { label: "group.self", styles: ["aura", "transformation", "soin", "teleportation"] },
 ];
 
 const DURABLE_STYLES: readonly StyleId[] = ["aura", "pluie", "dome", "cube", "mur", "nuage", "transformation"];

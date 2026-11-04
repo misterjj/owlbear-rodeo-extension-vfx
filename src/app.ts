@@ -2,6 +2,7 @@ import OBR from "@owlbear-rodeo/sdk";
 import { FX_TARGET_KEY, FX_UI_CHANNEL, playersAllowedIn } from "./fx";
 import { setCastCompact, setupCast, setupSettings, targetToken, watchRoomSettings } from "./panel";
 import { setProgramsCompact, setupPrograms } from "./programmes";
+import { currentLanguage, t, type TextKey } from "./i18n";
 import "./panel.css";
 import "./programmes.css";
 
@@ -23,10 +24,10 @@ let programsReady = false;
 const post = (type: string) =>
   OBR.broadcast.sendMessage(FX_UI_CHANNEL, { type }, { destination: "LOCAL" }).catch(warn);
 
-const TABS: { id: Tab; label: string; gmOnly: boolean }[] = [
-  { id: "cast", label: "Lancer", gmOnly: false },
-  { id: "programs", label: "Programmes", gmOnly: true },
-  { id: "settings", label: "Réglages", gmOnly: true },
+const TABS: { id: Tab; label: TextKey; gmOnly: boolean }[] = [
+  { id: "cast", label: "tab.cast", gmOnly: false },
+  { id: "programs", label: "tab.programs", gmOnly: true },
+  { id: "settings", label: "tab.settings", gmOnly: false },
 ];
 
 function showTab(next: Tab) {
@@ -46,9 +47,9 @@ function renderNav() {
   const nav = app.querySelector<HTMLElement>("#tabs")!;
   nav.innerHTML = `
     ${TABS.filter(({ gmOnly }) => isGm || !gmOnly)
-      .map(({ id, label }) => `<button type="button" role="tab" data-tab="${id}">${label}</button>`)
+      .map(({ id, label }) => `<button type="button" role="tab" data-tab="${id}">${t(label)}</button>`)
       .join("")}
-    <button type="button" id="compact" class="tool" title="${compact ? "Agrandir" : "Réduire"}" aria-label="${compact ? "Agrandir" : "Réduire"} la fenêtre">${compact ? "▢" : "–"}</button>`;
+    <button type="button" id="compact" class="tool" title="${t(compact ? "app.expand" : "app.shrink")}" aria-label="${t(compact ? "app.expandWindow" : "app.shrinkWindow")}">${compact ? "▢" : "–"}</button>`;
   nav.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((button) => {
     button.onclick = () => showTab(button.dataset.tab as Tab);
   });
@@ -92,10 +93,11 @@ OBR.onReady(async () => {
   isGm = role === "GM";
   playersAllowed = playersAllowedIn(metadata);
   document.documentElement.classList.toggle("compact", compact);
+  document.documentElement.lang = currentLanguage();
   app.innerHTML = `
     <div id="shell">
       <nav id="tabs" class="tabs" role="tablist"></nav>
-      <p id="denied" class="denied" hidden>Le MJ n'a pas autorisé les joueurs à lancer des effets.</p>
+      <p id="denied" class="denied" hidden>${t("app.denied")}</p>
       <div id="shell-content">
         <div id="tab-cast" data-pane="cast"></div>
         <div id="tab-programs" data-pane="programs" hidden></div>
@@ -107,11 +109,11 @@ OBR.onReady(async () => {
   setProgramsCompact(compact);
   await watchRoomSettings();
   await setupCast(pane("tab-cast"), isGm);
+  setupSettings(pane("tab-settings"), playersAllowed);
   const ensureGmTabs = async () => {
     if (!isGm || programsReady) return;
     programsReady = true;
     await setupPrograms(pane("tab-programs"));
-    setupSettings(pane("tab-settings"), playersAllowed);
   };
   await ensureGmTabs();
   renderNav();
@@ -138,6 +140,7 @@ OBR.onReady(async () => {
     if (gm === isGm) return;
     isGm = gm;
     await setupCast(pane("tab-cast"), isGm);
+    setupSettings(pane("tab-settings"), playersAllowed);
     await ensureGmTabs();
     renderNav();
     renderAccess();

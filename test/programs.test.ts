@@ -1,3 +1,4 @@
+import { forceLanguage } from "../src/i18n";
 import { MAX_LIMIT } from "../src/fx";
 import { describe, expect, it } from "vitest";
 import {
@@ -41,6 +42,8 @@ const base: Program = {
   startedAt: 1000,
 };
 const key = "vfx-owlbear/programmes";
+
+forceLanguage("fr");
 
 describe("valeurs saisies", () => {
   it("garde des valeurs valides", () => {

@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { DICTIONARY_KEYS, LANGUAGES, browserLanguage, dictionary, forceLanguage, t } from "../src/i18n";
 import { readFileSync } from "node:fs";
 import {
   DEFAULT_CHOICE,
@@ -750,5 +751,34 @@ describe("cube", () => {
   it("peut durer, sans partir tout seul du token", () => {
     expect(canBeDurable("cube")).toBe(true);
     expect(castsOnSelf("cube")).toBe(false);
+  });
+});
+
+beforeAll(() => forceLanguage("fr"));
+
+describe("traductions", () => {
+  it("donne le français à un navigateur français, l'anglais aux autres", () => {
+    expect(browserLanguage(["fr-CH", "en"])).toBe("fr");
+    expect(browserLanguage(["de-DE", "fr"])).toBe("fr");
+    expect(browserLanguage(["de-DE"])).toBe("en");
+    expect(browserLanguage([])).toBe("en");
+  });
+
+  it("traduit dans la langue choisie et remplace les valeurs", () => {
+    forceLanguage("en");
+    expect(t("wheel.notYours", { name: "Orc" })).toBe("You don't control Orc.");
+    forceLanguage("fr");
+    expect(t("wheel.notYours", { name: "Orc" })).toBe("Tu n'as pas la main sur Orc.");
+  });
+
+  it("n'oublie aucun texte, avec les mêmes valeurs dans chaque langue", () => {
+    const slots = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort();
+    for (const language of LANGUAGES) {
+      for (const key of DICTIONARY_KEYS) {
+        const text = dictionary(language)[key];
+        expect(text, `${language} ${key}`).toBeTruthy();
+        expect(slots(text), `${language} ${key}`).toEqual(slots(dictionary("fr")[key]));
+      }
+    }
   });
 });

@@ -7,6 +7,8 @@ import {
   FX_WHEEL_ID,
   STYLES,
   WHEEL_OUTER,
+  elementLabel,
+  styleLabel,
   durablesIn,
   fitWheelLabel,
   isDurable,
@@ -21,6 +23,7 @@ import {
   type Rgb,
 } from "./fx";
 import { STYLE_ICONS } from "./fx-icons";
+import { t } from "./i18n";
 import "./wheel.css";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -43,8 +46,8 @@ const close = () => OBR.popover.close(FX_WHEEL_ID);
 
 function detail(spell: Favorite) {
   const measure = spell.exact !== null && STYLES[spell.style].exactZone ? `${spell.exact} ${unit}` : spell.size;
-  const extras = [isDurable(spell) ? "durable" : "", startsOnFace(spell) ? "sur une face" : ""].filter(Boolean);
-  return [STYLES[spell.style].label, ELEMENTS[spell.element].label, measure, ...extras].join(" · ");
+  const extras = [isDurable(spell) ? t("options.durable") : "", startsOnFace(spell) ? t("options.onFace") : ""].filter(Boolean);
+  return [styleLabel(spell.style), elementLabel(spell.element), measure, ...extras].join(" · ");
 }
 
 function spellSector(spell: Favorite, index: number) {
@@ -60,7 +63,7 @@ function spellSector(spell: Favorite, index: number) {
     )
     .join("");
   return `
-    <g class="spell${isLit(spell) ? " lit" : ""}" data-spell="${index}" role="button" tabindex="0" style="--color: ${color}" aria-label="${escapeHtml(spell.name)}${isLit(spell) ? ", allumé, activer pour l'éteindre" : ""}">
+    <g class="spell${isLit(spell) ? " lit" : ""}" data-spell="${index}" role="button" tabindex="0" style="--color: ${color}" aria-label="${isLit(spell) ? escapeHtml(t("wheel.litAction", { name: spell.name })) : escapeHtml(spell.name)}">
       <path class="sector" d="${path}"></path>
       <g class="icon" transform="translate(${middle.x - 12} ${top})">${STYLE_ICONS[spell.style]}</g>
       ${text}
@@ -76,7 +79,7 @@ function renderWheel() {
   app.querySelectorAll<SVGGElement>("[data-spell]").forEach((element) => {
     const spell = spells[Number(element.dataset.spell)];
     const show = () => {
-      pill.textContent = isLit(spell) ? `${detail(spell)} · allumé` : detail(spell);
+      pill.textContent = isLit(spell) ? `${detail(spell)} · ${t("wheel.lit")}` : detail(spell);
       pill.hidden = false;
     };
     const hide = () => {
@@ -106,9 +109,9 @@ function renderWheel() {
 function renderEmpty() {
   app.innerHTML = `
     <div class="card" id="card">
-      <strong>${escapeHtml(tokenName || "Ce token")}</strong>
-      <p class="empty">Aucun sort sur ce token.</p>
-      <button type="button" id="configure">Configurer sa roue</button>
+      <strong>${escapeHtml(tokenName || t("wheel.thisToken"))}</strong>
+      <p class="empty">${t("wheel.empty")}</p>
+      <button type="button" id="configure">${t("wheel.configure")}</button>
     </div>`;
   app.querySelector<HTMLDivElement>("#card")!.onclick = (event) => event.stopPropagation();
   app.querySelector<HTMLButtonElement>("#configure")!.onclick = async () => {

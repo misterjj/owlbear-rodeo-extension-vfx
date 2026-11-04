@@ -1,7 +1,8 @@
 import OBR, { type Metadata } from "@owlbear-rodeo/sdk";
-import { DEFAULT_LIMIT, ELEMENTS, STYLES, exactZoneLabel, isExact, limitsIn, type ElementId, type SizeId, type StyleId } from "./fx";
+import { DEFAULT_LIMIT, STYLES, elementLabel, exactZoneLabel, styleLabel, isExact, limitsIn, type ElementId, type SizeId, type StyleId } from "./fx";
 import { elementColor, elementGrid, elementValue, pickerRow, sizeRow, styleGrid, type PickerId } from "./effect-fields";
 import { STYLE_ICONS } from "./fx-icons";
+import { t } from "./i18n";
 import {
   FX_PROGRAMS_KEY,
   FX_PROGRAM_CHANNEL,
@@ -49,9 +50,9 @@ async function saveWith(change: (current: Program[]) => Program[]) {
 
 const rhythm = ({ min, max, offset, shots }: Program) =>
   [
-    min === max ? `toutes les ${min} s` : `toutes les ${min} à ${max} s`,
-    offset > 0 ? `décalé de ${offset} s` : "",
-    shots === null ? "" : `${shots} tir${shots > 1 ? "s" : ""}`,
+    min === max ? t("program.every", { min }) : t("program.everyRange", { min, max }),
+    offset > 0 ? t("program.offset", { offset }) : "",
+    shots === null ? "" : t(shots > 1 ? "program.shots" : "program.shot", { count: shots }),
   ]
     .filter(Boolean)
     .join(", ");
@@ -60,7 +61,7 @@ const picto = ({ style, element }: Program) =>
   `<svg class="picto" viewBox="0 0 24 24" aria-hidden="true" style="color: ${elementColor(element)}">${STYLE_ICONS[style]}</svg>`;
 
 function toggleButton({ id, name, active }: Program) {
-  const action = `${active ? "Désactiver" : "Activer"} ${escapeHtml(name)}`;
+  const action = t(active ? "program.deactivate" : "program.activate", { name: escapeHtml(name) });
   return `<button type="button" class="btn toggle ${active ? "on" : ""}" data-toggle="${escapeHtml(id)}" title="${action}" aria-label="${action}">${active ? "■" : "▶"}</button>`;
 }
 
@@ -71,12 +72,12 @@ function programRow(program: Program) {
       ${picto(program)}
       <div class="info">
         <span class="name">${escapeHtml(name)}</span>
-        <small>${escapeHtml(`${STYLES[style].label} · ${ELEMENTS[element].label}`)}</small>
+        <small>${escapeHtml(`${styleLabel(style)} · ${elementLabel(element)}`)}</small>
         <small>${escapeHtml(rhythm(program))}</small>
       </div>
       ${toggleButton(program)}
-      <button type="button" class="btn" data-edit="${escapeHtml(id)}" aria-label="Modifier ${escapeHtml(name)}" title="Modifier">✎</button>
-      <button type="button" class="btn ${confirmingDelete === id ? "danger" : ""}" data-delete="${escapeHtml(id)}" aria-label="Supprimer ${escapeHtml(name)}" title="Supprimer">${confirmingDelete === id ? "Confirmer" : "✕"}</button>
+      <button type="button" class="btn" data-edit="${escapeHtml(id)}" aria-label="${t("action.editNamed", { name: escapeHtml(name) })}" title="${t("action.edit")}">✎</button>
+      <button type="button" class="btn ${confirmingDelete === id ? "danger" : ""}" data-delete="${escapeHtml(id)}" aria-label="${t("program.deleteNamed", { name: escapeHtml(name) })}" title="${t("program.delete")}">${confirmingDelete === id ? t("program.confirm") : "✕"}</button>
     </div>`;
 }
 
@@ -86,9 +87,9 @@ function groupBlock(group: string, members: Program[]) {
   return `
     <section class="group">
       <div class="group-head">
-        <h2>${name} <small>${running}/${members.length} actif${running > 1 ? "s" : ""}</small></h2>
-        <button type="button" class="btn" data-group-on="${name}" title="Tout activer dans ${name}" aria-label="Tout activer dans ${name}">▶ Tout</button>
-        <button type="button" class="btn" data-group-off="${name}" title="Tout désactiver dans ${name}" aria-label="Tout désactiver dans ${name}">■ Tout</button>
+        <h2>${name} <small>${t(running > 1 ? "program.activeMany" : "program.activeOne", { running, total: members.length })}</small></h2>
+        <button type="button" class="btn" data-group-on="${name}" title="${t("program.allOnNamed", { name })}" aria-label="${t("program.allOnNamed", { name })}">${t("program.allOn")}</button>
+        <button type="button" class="btn" data-group-off="${name}" title="${t("program.allOffNamed", { name })}" aria-label="${t("program.allOffNamed", { name })}">${t("program.allOff")}</button>
       </div>
       ${members.map(programRow).join("")}
     </section>`;
@@ -128,8 +129,8 @@ function compactGroup(group: string, members: Program[]) {
   return `
     <div class="mini mini-group">
       <h2 title="${name}">${name}</h2>
-      <button type="button" class="btn" data-group-on="${name}" title="Tout activer dans ${name}" aria-label="Tout activer dans ${name}">▶</button>
-      <button type="button" class="btn" data-group-off="${name}" title="Tout désactiver dans ${name}" aria-label="Tout désactiver dans ${name}">■</button>
+      <button type="button" class="btn" data-group-on="${name}" title="${t("program.allOnNamed", { name })}" aria-label="${t("program.allOnNamed", { name })}">▶</button>
+      <button type="button" class="btn" data-group-off="${name}" title="${t("program.allOffNamed", { name })}" aria-label="${t("program.allOffNamed", { name })}">■</button>
     </div>
     ${members.map(compactRow).join("")}`;
 }
@@ -157,11 +158,11 @@ function renderCompact() {
   const groups = groupNames(programs);
   const loose = programs.filter(({ group }) => !group);
   const editing = draft
-    ? `<p class="note">${picking ? `Clique sur la carte : ${draft.anchors.length} point(s).` : "Programme en cours de saisie : agrandis pour reprendre."}</p>`
+    ? `<p class="note">${picking ? t("program.pickingNote", { count: draft.anchors.length }) : t("program.draftNote")}</p>`
     : "";
   app.innerHTML = `
     ${editing}
-    ${programs.length ? "" : `<p class="empty">Aucun programme.</p>`}
+    ${programs.length ? "" : `<p class="empty">${t("program.emptyShort")}</p>`}
     ${groups.map((group) => compactGroup(group, programs.filter((p) => p.group === group))).join("")}
     ${loose.map(compactRow).join("")}`;
   bindToggles();
@@ -176,12 +177,12 @@ function renderList() {
   const loose = programs.filter(({ group }) => !group);
   app.innerHTML = `
     <header class="bar">
-      <strong>Programmes (${programs.length}/${programLimit})</strong>
-      <button type="button" class="btn primary" id="new" ${programs.length >= programLimit ? "disabled" : ""} title="${programs.length >= programLimit ? "Limite atteinte : change-la dans Réglages" : ""}">+ Nouveau</button>
+      <strong>${t("program.title", { count: programs.length, limit: programLimit })}</strong>
+      <button type="button" class="btn primary" id="new" ${programs.length >= programLimit ? "disabled" : ""} title="${programs.length >= programLimit ? t("program.limitReached") : ""}">${t("program.new")}</button>
     </header>
-    ${programs.length ? "" : `<p class="empty">Un programme relance un effet tout seul, à ton rythme : un canon toutes les 3 secondes, des éclairs entre deux poteaux. Rien ne part tant que tu ne l'as pas activé.</p>`}
+    ${programs.length ? "" : `<p class="empty">${t("program.empty")}</p>`}
     ${groups.map((group) => groupBlock(group, programs.filter((p) => p.group === group))).join("")}
-    ${loose.length ? `<section class="group">${groups.length ? `<div class="group-head"><h2>Sans groupe</h2></div>` : ""}${loose.map(programRow).join("")}</section>` : ""}`;
+    ${loose.length ? `<section class="group">${groups.length ? `<div class="group-head"><h2>${t("program.noGroup")}</h2></div>` : ""}${loose.map(programRow).join("")}</section>` : ""}`;
 
   app.querySelector<HTMLButtonElement>("#new")!.onclick = () => {
     draft = {
@@ -260,23 +261,23 @@ function anchorsHtml() {
       ({ at, token }, index) => `
         <div class="anchor">
           <span class="rank">${index + 1}</span>
-          <span>${token ? `Token ${escapeHtml(token.name)}` : `Carte (${Math.round(at.x)}, ${Math.round(at.y)})`}</span>
-          <button type="button" class="btn" data-move-anchor="${index}" data-delta="-1" ${index === 0 ? "disabled" : ""} aria-label="Monter le point ${index + 1}" title="Monter">▲</button>
-          <button type="button" class="btn" data-move-anchor="${index}" data-delta="1" ${index === anchors.length - 1 ? "disabled" : ""} aria-label="Descendre le point ${index + 1}" title="Descendre">▼</button>
-          <button type="button" class="btn" data-remove-anchor="${index}" aria-label="Retirer le point ${index + 1}" title="Retirer">✕</button>
+          <span>${token ? t("program.token", { name: escapeHtml(token.name) }) : t("program.mapPoint", { x: Math.round(at.x), y: Math.round(at.y) })}</span>
+          <button type="button" class="btn" data-move-anchor="${index}" data-delta="-1" ${index === 0 ? "disabled" : ""} aria-label="${t("program.moveUpNamed", { index: index + 1 })}" title="${t("program.moveUp")}">▲</button>
+          <button type="button" class="btn" data-move-anchor="${index}" data-delta="1" ${index === anchors.length - 1 ? "disabled" : ""} aria-label="${t("program.moveDownNamed", { index: index + 1 })}" title="${t("program.moveDown")}">▼</button>
+          <button type="button" class="btn" data-remove-anchor="${index}" aria-label="${t("program.removePoint", { index: index + 1 })}" title="${t("action.remove")}">✕</button>
         </div>`,
     )
     .join("");
   const directed = STYLES[style].directed;
   const note = style === "chaine"
-    ? "À chaque tir, la chaîne parcourt tous les points dans l'ordre. L'intervalle compte à partir de sa fin."
+    ? t("program.chainNote")
     : directed
-    ? "Avec deux points, l'effet va du premier au second. Avec plus, il relie deux points au hasard."
-    : "Avec plusieurs points, chaque tir en choisit un au hasard.";
+    ? t("program.directedNote")
+    : t("program.areaNote");
   return `
-    ${rows || `<p class="empty">Aucun point pour l'instant (${anchorsNeeded(style)} au moins).</p>`}
-    <button type="button" id="pick" class="btn wide-action ${picking ? "picking" : ""}" ${anchors.length >= MAX_ANCHORS && !picking ? "disabled" : ""}>${picking ? "Terminer les clics sur la carte" : "Ajouter des points sur la carte"}</button>
-    <p class="note">${picking ? "Clique sur la carte ou sur un token. Échap pour finir." : note}</p>`;
+    ${rows || `<p class="empty">${t("program.noPoint", { count: anchorsNeeded(style) })}</p>`}
+    <button type="button" id="pick" class="btn wide-action ${picking ? "picking" : ""}" ${anchors.length >= MAX_ANCHORS && !picking ? "disabled" : ""}>${t(picking ? "program.stopPicking" : "program.startPicking")}</button>
+    <p class="note">${picking ? t("program.pickingHelp") : note}</p>`;
 }
 
 function bindAnchors() {
@@ -324,34 +325,34 @@ function renderForm() {
   const zone = STYLES[d.style].exactZone;
   const usesExact = zone && d.exact !== null;
   app.innerHTML = `
-    <header class="bar"><strong>${programs.some(({ id }) => id === d.id) ? "Modifier le programme" : "Nouveau programme"}</strong></header>
+    <header class="bar"><strong>${t(programs.some(({ id }) => id === d.id) ? "program.editTitle" : "program.newTitle")}</strong></header>
     <form id="form" novalidate>
       <div class="fields">
-        <label>Nom<input id="name" type="text" maxlength="40" value="${escapeHtml(d.name)}" placeholder="Ex. Canon du couloir" /></label>
-        <label>Groupe (facultatif)<input id="group" type="text" maxlength="30" list="groups" value="${escapeHtml(d.group)}" placeholder="Ex. Salle du trésor" /></label>
+        <label>${t("field.name")}<input id="name" type="text" maxlength="40" value="${escapeHtml(d.name)}" placeholder="${t("program.namePlaceholder")}" /></label>
+        <label>${t("program.group")}<input id="group" type="text" maxlength="30" list="groups" value="${escapeHtml(d.group)}" placeholder="${t("program.groupPlaceholder")}" /></label>
         <datalist id="groups">${groupNames(programs).map((group) => `<option value="${escapeHtml(group)}"></option>`).join("")}</datalist>
       </div>
-      <h2>Effet</h2>
-      ${pickerRow("element", "Élément", elementValue(d.element), openPicker === "element")}
+      <h2>${t("field.effect")}</h2>
+      ${pickerRow("element", t("field.element"), elementValue(d.element), openPicker === "element")}
       ${openPicker === "element" ? elementGrid(d.element) : ""}
-      ${pickerRow("style", "Style", STYLES[d.style].label, openPicker === "style")}
+      ${pickerRow("style", t("field.style"), styleLabel(d.style), openPicker === "style")}
       ${openPicker === "style" ? styleGrid(d.style) : ""}
       ${sizeRow(d.size, usesExact)}
-      ${zone ? `<label class="inline"><span>${exactZoneLabel(d.style)} exact (<span data-unit>${escapeHtml(unit)}</span>)</span><input id="exact" type="number" min="0" step="any" value="${d.exact ?? ""}" /></label>` : ""}
-      <h2>Rythme</h2>
+      ${zone ? `<label class="inline"><span>${t("zone.exact", { what: exactZoneLabel(d.style) })} (<span data-unit>${escapeHtml(unit)}</span>)</span><input id="exact" type="number" min="0" step="any" value="${d.exact ?? ""}" /></label>` : ""}
+      <h2>${t("program.rhythm")}</h2>
       <div class="fields">
-        <label>Intervalle min. (secondes)<input id="min" type="number" min="${MIN_INTERVAL}" step="any" value="${d.min}" /></label>
-        <label>Intervalle max. (secondes)<input id="max" type="number" min="${MIN_INTERVAL}" step="any" value="${d.max}" /></label>
-        <label>Premier tir après (secondes)<input id="offset" type="number" min="0" step="any" value="${d.offset}" /></label>
-        <label>Tirs (vide : sans fin)<input id="shots" type="number" min="1" step="1" value="${d.shots ?? ""}" /></label>
+        <label>${t("program.minInterval")}<input id="min" type="number" min="${MIN_INTERVAL}" step="any" value="${d.min}" /></label>
+        <label>${t("program.maxInterval")}<input id="max" type="number" min="${MIN_INTERVAL}" step="any" value="${d.max}" /></label>
+        <label>${t("program.firstShot")}<input id="offset" type="number" min="0" step="any" value="${d.offset}" /></label>
+        <label>${t("program.shotsField")}<input id="shots" type="number" min="1" step="1" value="${d.shots ?? ""}" /></label>
       </div>
-      ${d.group ? `<p class="note">Décaler le premier tir fait alterner les programmes de ce groupe.</p>` : ""}
-      <h2>Points</h2>
+      ${d.group ? `<p class="note">${t("program.offsetNote")}</p>` : ""}
+      <h2>${t("program.points")}</h2>
       <div id="anchors"></div>
       ${problem ? `<p class="error" role="alert">${escapeHtml(problem)}</p>` : ""}
       <div class="actions">
-        <button type="button" class="btn" id="cancel">Annuler</button>
-        <button type="submit" class="btn primary">Enregistrer</button>
+        <button type="button" class="btn" id="cancel">${t("action.cancel")}</button>
+        <button type="submit" class="btn primary">${t("action.save")}</button>
       </div>
     </form>`;
   refreshAnchors();
@@ -406,7 +407,7 @@ function renderForm() {
       .then(closeForm)
       .catch((error) => {
         warn(error);
-        problem = "Enregistrement impossible.";
+        problem = t("program.saveFailed");
         renderForm();
       });
   };

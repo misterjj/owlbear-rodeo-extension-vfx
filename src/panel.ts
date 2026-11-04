@@ -1,6 +1,5 @@
 import OBR, { type Metadata } from "@owlbear-rodeo/sdk";
 import {
-  ELEMENTS,
   ELEMENT_IDS,
   FX_DURABLE_KEY,
   FX_SPELLS_KEY,
@@ -14,6 +13,8 @@ import {
   SIZE_IDS,
   STYLES,
   STYLE_IDS,
+  elementLabel,
+  styleLabel,
   addFavorite,
   canBeDurable,
   defaultSpellName,
@@ -42,6 +43,7 @@ import {
 } from "./fx";
 import { elementGrid, elementValue, pickerRow, sizeRow, styleGrid, swatch } from "./effect-fields";
 import { FX_PROGRAM_CHANNEL } from "./fx-programs";
+import { LANGUAGES, LANGUAGE_NAMES, languageSetting, setLanguageSetting, t, type Language } from "./i18n";
 import { watchSceneUnit } from "./scene-unit";
 
 let app: HTMLElement;
@@ -99,26 +101,26 @@ const postPick = (type: string) =>
 
 function hint() {
   if (startsOnFace(choice)) {
-    return `Clique sur le token, puis dans la direction où poser le cube${isDurable(choice) ? " (reclique sur le token pour l'éteindre)" : ""}. Sur la carte, il se centre sur le clic.${choice.gmOnly ? " Caché aux joueurs." : ""}`;
+    return `${t("hint.faceBase", { off: isDurable(choice) ? t("hint.faceOff") : "" })}${choice.gmOnly ? ` ${t("hint.hidden")}` : ""}`;
   }
   if (isDurable(choice)) {
     const where =
       choice.style === "mur"
-        ? "Clique sur le début du mur, puis sur sa fin."
-        : "Clique sur un token pour l'y attacher (reclique pour l'éteindre), ou sur la carte pour l'y poser.";
-    return choice.gmOnly ? `${where} Caché aux joueurs.` : where;
+        ? t("hint.wall")
+        : t("hint.attach");
+    return choice.gmOnly ? `${where} ${t("hint.hidden")}` : where;
   }
   if (choice.gmOnly) {
     return choice.style === "teleportation"
-      ? "MJ seulement : les joueurs ne voient rien et le token ne bouge pas."
-      : "MJ seulement : les joueurs ne voient rien.";
+      ? t("hint.gmTeleport")
+      : t("hint.gmOnly");
   }
-  if (choice.style === "chaine") return "Clique sur le lanceur, puis sur chaque cible. Échap pour finir.";
-  if (choice.style === "mur") return "Clique sur le début du mur, puis sur sa fin.";
-  if (choice.style === "teleportation") return "Clique sur le token, puis sur son arrivée.";
+  if (choice.style === "chaine") return t("hint.chain");
+  if (choice.style === "mur") return t("hint.wall");
+  if (choice.style === "teleportation") return t("hint.teleport");
   return STYLES[choice.style].directed
-    ? "Clique sur le lanceur, puis sur la cible."
-    : "Clique sur la carte pour lancer l'effet.";
+    ? t("hint.directed")
+    : t("hint.map");
 }
 
 /** Une fois un autre outil pris en main, le clic sur la carte ne lance plus rien : ça doit se voir. */
@@ -126,8 +128,8 @@ function bannerHtml() {
   return toolActive
     ? `<p class="hint" id="hint">${hint()}</p>`
     : `<div class="hint off-tool">
-         <span>Tu as changé d'outil : la carte ne lance plus d'effet.</span>
-         <button type="button" id="arm">Reprendre</button>
+         <span>${t("banner.offTool")}</span>
+         <button type="button" id="arm">${t("banner.resume")}</button>
        </div>`;
 }
 
@@ -147,22 +149,22 @@ function favoritesSection() {
       (favorite, index) => `
         <span class="favorite">
           <button type="button" data-favorite="${index}" aria-pressed="${matchesFavorite(favorite, choice)}">${escapeHtml(favorite.name)}</button>
-          <button type="button" class="remove" data-remove="${index}" aria-label="Retirer ${escapeHtml(favorite.name)}" title="Retirer">✕</button>
+          <button type="button" class="remove" data-remove="${index}" aria-label="${escapeHtml(t("action.removeNamed", { name: favorite.name }))}" title="${t("action.remove")}">✕</button>
         </span>`,
     )
     .join("");
   const full = favorites.length >= MAX_FAVORITES;
   return `
     <section>
-      <h2>Favoris</h2>
+      <h2>${t("favorites.title")}</h2>
       <div class="favorites">
         ${list}
-        ${savingFavorite ? "" : `<span class="favorite"><button type="button" id="new-favorite">+ Enregistrer</button></span>`}
+        ${savingFavorite ? "" : `<span class="favorite"><button type="button" id="new-favorite">${t("favorites.add")}</button></span>`}
       </div>
       ${savingFavorite
         ? `<form class="save" id="save">
-             <input id="favorite-name" type="text" maxlength="30" aria-label="Nom du favori" placeholder="${full ? "Liste pleine : un nom existant le remplace" : "Nom, ex. Boule de feu"}" />
-             <button type="submit">OK</button>
+             <input id="favorite-name" type="text" maxlength="30" aria-label="${t("favorites.nameLabel")}" placeholder="${t(full ? "favorites.full" : "favorites.placeholder")}" />
+             <button type="submit">${t("favorites.ok")}</button>
            </form>`
         : ""}
     </section>`;
@@ -184,18 +186,18 @@ function foldHtml(id: FoldId, title: string, summary: string, content: string, f
 function optionsSummary() {
   const parts = [
     usesExact() ? `${exactZoneLabel(choice.style)} ${choice.exact} <span data-unit>${escapeHtml(unit)}</span>` : "",
-    isDurable(choice) ? "durable" : "",
-    startsOnFace(choice) ? "sur une face" : "",
+    isDurable(choice) ? t("options.durable") : "",
+    startsOnFace(choice) ? t("options.onFace") : "",
   ].filter(Boolean);
   if (parts.length) return parts.join(" · ");
-  return [STYLES[choice.style].exactZone ? "zone exacte" : "", canBeDurable(choice.style) ? "durable" : ""]
+  return [STYLES[choice.style].exactZone ? t("options.exact") : "", canBeDurable(choice.style) ? t("options.durable") : ""]
     .filter(Boolean)
     .join(", ");
 }
 
 function optionsFold() {
   const content = `${exactRow()}${durableRow()}${originRow()}`;
-  return content.trim() ? foldHtml("options", "Plus d'options", optionsSummary(), content) : "";
+  return content.trim() ? foldHtml("options", t("options.title"), optionsSummary(), content) : "";
 }
 
 function bindFolds(container: HTMLElement) {
@@ -216,7 +218,7 @@ function exactRow() {
   const what = exactZoneLabel(choice.style);
   return `
     <label class="exact">
-      ${what} exact
+      ${t("zone.exact", { what })}
       <input id="exact" type="number" min="0" step="any" value="${choice.exact ?? ""}" />
       <span data-unit>${escapeHtml(unit)}</span>
     </label>`;
@@ -226,16 +228,16 @@ function originRow() {
   if (choice.style !== "cube") return "";
   const face = choice.onFace === true;
   return `
-    <div class="origin" role="radiogroup" aria-label="Origine sur un token">
-      <span>Sur un token :</span>
-      <label><input type="radio" name="origin" value="centre" ${face ? "" : "checked"} /> au centre</label>
-      <label><input type="radio" name="origin" value="face" ${face ? "checked" : ""} /> sur une face</label>
+    <div class="origin" role="radiogroup" aria-label="${t("options.originLabel")}">
+      <span>${t("options.originOnToken")}</span>
+      <label><input type="radio" name="origin" value="centre" ${face ? "" : "checked"} /> ${t("options.originCenter")}</label>
+      <label><input type="radio" name="origin" value="face" ${face ? "checked" : ""} /> ${t("options.originFace")}</label>
     </div>`;
 }
 
 function durableRow() {
   if (!canBeDurable(choice.style)) return "";
-  return `<label class="option durable"><input id="durable" type="checkbox" ${choice.durable ? "checked" : ""} /> Durable : reste jusqu'à ce qu'on le retire</label>`;
+  return `<label class="option durable"><input id="durable" type="checkbox" ${choice.durable ? "checked" : ""} /> ${t("options.durableLong")}</label>`;
 }
 
 function runningList() {
@@ -245,14 +247,14 @@ function runningList() {
         .map(
           ({ id, name, carrier }) => `
             <div class="running">
-              <span>${escapeHtml(name)} <small>${carrier ? `sur ${escapeHtml(carrier.name)}` : "sur la carte"}</small></span>
-              <button type="button" data-stop="${escapeHtml(id)}" aria-label="Retirer ${escapeHtml(name)}" title="Retirer">✕</button>
+              <span>${escapeHtml(name)} <small>${carrier ? t("running.onToken", { name: escapeHtml(carrier.name) }) : t("running.onMap")}</small></span>
+              <button type="button" data-stop="${escapeHtml(id)}" aria-label="${t("action.removeNamed", { name: escapeHtml(name) })}" title="${t("action.remove")}">✕</button>
             </div>`,
         )
         .join("")}
-      ${running.length > 1 ? `<button type="button" class="stop-all" id="stop-all">Tout retirer</button>` : ""}`;
-  if (compact) return `<section><h2>Effets durables (${running.length}/${limits.durable})</h2>${list}</section>`;
-  return foldHtml("running", "Effets durables", `${running.length}/${limits.durable} actif${running.length > 1 ? "s" : ""}`, list);
+      ${running.length > 1 ? `<button type="button" class="stop-all" id="stop-all">${t("running.removeAll")}</button>` : ""}`;
+  if (compact) return `<section><h2>${t("running.title")} (${running.length}/${limits.durable})</h2>${list}</section>`;
+  return foldHtml("running", t("running.title"), t(running.length > 1 ? "running.activeMany" : "running.active", { count: running.length, limit: limits.durable }), list);
 }
 
 /** Retire de la liste à jour : un autre joueur a pu y toucher depuis son affichage. */
@@ -323,7 +325,7 @@ export async function targetToken(id: string, reveal = false) {
   editing = undefined;
   if (!(await mayEdit(item.layer, item.createdUserId))) {
     target = undefined;
-    targetProblem = `Tu n'as pas la main sur ${item.name}.`;
+    targetProblem = t("wheel.notYours", { name: item.name });
   } else {
     target = { id: item.id, name: item.name, spells: spellsOf(item.metadata) };
     targetProblem = "";
@@ -340,23 +342,23 @@ function options<T extends string>(ids: readonly T[], label: (id: T) => string, 
 function spellEditHtml(spell: Favorite) {
   return `
     <section>
-      <h2>Modifier le sort de ${escapeHtml(target!.name)}</h2>
+      <h2>${t("wheel.editTitle", { name: escapeHtml(target!.name) })}</h2>
       <form id="spell-edit" class="edit" novalidate>
-        <label class="wide">Nom<input type="text" id="spell-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(spell.name)}" /></label>
-        <label>Élément<select id="spell-element">${options(ELEMENT_IDS, (id) => ELEMENTS[id].label, spell.element)}</select></label>
-        <label>Style<select id="spell-style">${options(STYLE_IDS, (id) => STYLES[id].label, spell.style)}</select></label>
-        <label>Taille<select id="spell-size">${options(SIZE_IDS, (id) => id, spell.size)}</select></label>
+        <label class="wide">${t("field.name")}<input type="text" id="spell-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(spell.name)}" /></label>
+        <label>${t("field.element")}<select id="spell-element">${options(ELEMENT_IDS, elementLabel, spell.element)}</select></label>
+        <label>${t("field.style")}<select id="spell-style">${options(STYLE_IDS, styleLabel, spell.style)}</select></label>
+        <label>${t("field.size")}<select id="spell-size">${options(SIZE_IDS, (id) => id, spell.size)}</select></label>
         <label id="spell-exact-row"><span id="spell-exact-label"></span><input type="number" id="spell-exact" min="0" step="any" value="${spell.exact ?? ""}" /></label>
-        <label class="wide" id="spell-origin-row">Origine sur le token<select id="spell-origin">
-          <option value="centre"${spell.onFace ? "" : " selected"}>Au centre</option>
-          <option value="face"${spell.onFace ? " selected" : ""}>Sur une face (viser la direction)</option>
+        <label class="wide" id="spell-origin-row">${t("wheel.origin")}<select id="spell-origin">
+          <option value="centre"${spell.onFace ? "" : " selected"}>${t("wheel.originCenter")}</option>
+          <option value="face"${spell.onFace ? " selected" : ""}>${t("wheel.originFace")}</option>
         </select></label>
-        <label class="wide check" id="spell-durable-row"><input type="checkbox" id="spell-durable"${spell.durable ? " checked" : ""} /> Durable</label>
-        ${isSpellLit(spell) ? `<p class="note wide">Déjà allumé : l'effet en cours ne change pas. Éteins-le pour voir la nouvelle version.</p>` : ""}
+        <label class="wide check" id="spell-durable-row"><input type="checkbox" id="spell-durable"${spell.durable ? " checked" : ""} /> ${t("wheel.durable")}</label>
+        ${isSpellLit(spell) ? `<p class="note wide">${t("wheel.alreadyLit")}</p>` : ""}
         <p class="error wide" id="spell-error" hidden></p>
         <div class="wide edit-actions">
-          <button type="button" id="spell-cancel">Annuler</button>
-          <button type="submit" class="save-spell">Enregistrer</button>
+          <button type="button" id="spell-cancel">${t("action.cancel")}</button>
+          <button type="submit" class="save-spell">${t("action.save")}</button>
         </div>
       </form>
     </section>`;
@@ -379,7 +381,7 @@ function bindSpellEdit(index: number, container: HTMLElement) {
   const showFieldsOfStyle = () => {
     const style = styleField.value as StyleId;
     field("exact-row").hidden = !STYLES[style].exactZone;
-    field("exact-label").innerHTML = `${exactZoneLabel(style)} exact (<span data-unit>${escapeHtml(unit)}</span>)`;
+    field("exact-label").innerHTML = `${t("zone.exact", { what: exactZoneLabel(style) })} (<span data-unit>${escapeHtml(unit)}</span>)`;
     field("durable-row").hidden = !canBeDurable(style);
     field("origin-row").hidden = style !== "cube";
   };
@@ -409,14 +411,14 @@ function bindSpellEdit(index: number, container: HTMLElement) {
       onFace: field<HTMLSelectElement>("origin").value === "face",
     });
     if (next === spells) {
-      fail("Ce nom est vide ou déjà pris par un autre sort.");
+      fail(t("wheel.nameTaken"));
       return;
     }
     saveSpells(next)
       .then(close)
       .catch((reason) => {
         warn(reason);
-        fail("Enregistrement impossible.");
+        fail(t("wheel.saveFailed"));
       });
   };
   field<HTMLInputElement>("name").focus();
@@ -424,12 +426,12 @@ function bindSpellEdit(index: number, container: HTMLElement) {
 
 function wheelSectionHtml() {
   if (target && editing !== undefined && target.spells[editing]) return spellEditHtml(target.spells[editing]);
-  const pick = `<button type="button" class="wide-button" id="pick-token" ${pickingToken ? 'aria-pressed="true"' : ""}>${pickingToken ? "Clique sur un token… (Échap pour annuler)" : target ? "Choisir un autre token" : "Choisir un token sur la carte"}</button>`;
+  const pick = `<button type="button" class="wide-button" id="pick-token" ${pickingToken ? 'aria-pressed="true"' : ""}>${t(pickingToken ? "wheel.picking" : target ? "wheel.pickOther" : "wheel.pick")}</button>`;
   if (!target) {
     const invite = targetProblem
       ? `<p class="note">${escapeHtml(targetProblem)}</p>`
-      : `<p class="note">Sélectionne un token pour préparer sa roue : les sorts qu'on lance d'un clic, avec <em>Sorts</em> dans son menu.</p>`;
-    return foldHtml("wheel", "Roue d'un token", "aucun token", `${invite}${pick}`, pickingToken || Boolean(targetProblem));
+      : `<p class="note">${t("wheel.invite")}</p>`;
+    return foldHtml("wheel", t("wheel.titleAny"), t("wheel.noToken"), `${invite}${pick}`, pickingToken || Boolean(targetProblem));
   }
   const { name, spells } = target;
   const full = spells.length >= MAX_SPELLS;
@@ -439,25 +441,25 @@ function wheelSectionHtml() {
             .map(
               (spell, index) => `
                 <div class="spell-row">
-                  <span>${escapeHtml(spell.name)} <small>${STYLES[spell.style].label}${isDurable(spell) ? ", durable" : ""}${startsOnFace(spell) ? ", face" : ""}</small></span>
-                  <button type="button" data-edit-spell="${index}" aria-label="Modifier ${escapeHtml(spell.name)}" title="Modifier">✎</button>
-                  <button type="button" data-remove-spell="${index}" aria-label="Retirer ${escapeHtml(spell.name)}" title="Retirer">✕</button>
+                  <span>${escapeHtml(spell.name)} <small>${styleLabel(spell.style)}${isDurable(spell) ? t("wheel.durableTag") : ""}${startsOnFace(spell) ? t("wheel.faceTag") : ""}</small></span>
+                  <button type="button" data-edit-spell="${index}" aria-label="${t("action.editNamed", { name: escapeHtml(spell.name) })}" title="${t("action.edit")}">✎</button>
+                  <button type="button" data-remove-spell="${index}" aria-label="${t("action.removeNamed", { name: escapeHtml(spell.name) })}" title="${t("action.remove")}">✕</button>
                 </div>`,
             )
             .join("")
-        : `<p class="note">Aucun sort pour l'instant.</p>`}
+        : `<p class="note">${t("wheel.noSpell")}</p>`}
       ${full
-        ? `<p class="note">La roue est pleine : retire un sort pour en ajouter un.</p>`
+        ? `<p class="note">${t("wheel.full")}</p>`
         : `<form class="save" id="add-spell">
-             <input id="spell-new-name" type="text" maxlength="${MAX_NAME_LENGTH}" aria-label="Nom du nouveau sort" placeholder="${escapeHtml(defaultSpellName(choice))}" />
-             <button type="submit">+ Ajouter</button>
+             <input id="spell-new-name" type="text" maxlength="${MAX_NAME_LENGTH}" aria-label="${t("wheel.newName")}" placeholder="${escapeHtml(defaultSpellName(choice))}" />
+             <button type="submit">${t("wheel.add")}</button>
            </form>
-           <p class="note">Ajoute l'effet réglé ci-dessus.</p>`}
+           <p class="note">${t("wheel.addHint")}</p>`}
       ${pick}`;
   return foldHtml(
     "wheel",
-    `Roue de ${escapeHtml(name)}`,
-    `${spells.length} sort${spells.length > 1 ? "s" : ""}`,
+    t("wheel.title", { name: escapeHtml(name) }),
+    t(spells.length > 1 ? "wheel.spellCountMany" : "wheel.spellCount", { count: spells.length }),
     content,
     pickingToken,
   );
@@ -519,9 +521,9 @@ function bindFavoriteChoices() {
 
 /** L'essentiel pour jouer : ce qui partira au prochain clic, et de quoi changer d'effet ou en retirer un. */
 function renderCompact() {
-  const { label } = ELEMENTS[choice.element];
+  const label = elementLabel(choice.element);
   const measure = usesExact() ? `${choice.exact} <span data-unit>${escapeHtml(unit)}</span>` : choice.size;
-  const extras = [isDurable(choice) ? "durable" : "", choice.gmOnly ? "MJ seul" : ""].filter(Boolean);
+  const extras = [isDurable(choice) ? t("options.durable") : "", choice.gmOnly ? t("running.mjOnly") : ""].filter(Boolean);
   const chips = favorites
     .map(
       (favorite, index) => `
@@ -533,7 +535,7 @@ function renderCompact() {
   app.innerHTML = `
     <p class="current">
       ${swatch(choice.element)}
-      <span>${[label, STYLES[choice.style].label, measure, ...extras].join(" · ")}</span>
+      <span>${[label, styleLabel(choice.style), measure, ...extras].join(" · ")}</span>
     </p>
     ${chips ? `<div class="favorites compact-favorites">${chips}</div>` : ""}
     <div id="running"></div>
@@ -553,14 +555,14 @@ function render() {
     <div id="banner"></div>
     ${favoritesSection()}
     <section>
-      <h2>Effet</h2>
-      ${pickerRow("element", "Élément", elementValue(choice.element), openPicker === "element")}
+      <h2>${t("field.effect")}</h2>
+      ${pickerRow("element", t("field.element"), elementValue(choice.element), openPicker === "element")}
       ${openPicker === "element" ? elementGrid(choice.element) : ""}
-      ${pickerRow("style", "Style", STYLES[choice.style].label, openPicker === "style")}
+      ${pickerRow("style", t("field.style"), styleLabel(choice.style), openPicker === "style")}
       ${openPicker === "style" ? styleGrid(choice.style) : ""}
     </section>
     <section>
-      <h2>Taille</h2>
+      <h2>${t("field.size")}</h2>
       ${sizeRow(choice.size, Boolean(usesExact()))}
     </section>
     ${optionsFold()}
@@ -717,10 +719,10 @@ export async function setupCast(container: HTMLElement, gm: boolean) {
 function limitWarning() {
   const warnings = [
     limits.durable > DEFAULT_LIMIT
-      ? "Chaque effet durable est recalculé en continu par la carte graphique de chaque joueur : au-delà de 10, une machine modeste peut ralentir. Teste chez le joueur le moins bien équipé."
+      ? t("settings.warnDurable")
       : "",
     limits.programs > DEFAULT_LIMIT
-      ? "Beaucoup de programmes pèsent peu sur les machines, mais la scène les enregistre tous, et au plus 3 tirs partent en même temps : les suivants sont ignorés."
+      ? t("settings.warnPrograms")
       : "",
   ].filter(Boolean);
   return warnings.map((text) => `<p class="warning">⚠ ${text}</p>`).join("");
@@ -728,21 +730,40 @@ function limitWarning() {
 
 function renderSettings() {
   if (!settingsPane) return;
-  settingsPane.innerHTML = `
+  const language = languageSetting();
+  const languageSection = `
     <section>
-      <h2>Réglages</h2>
-      <label class="option"><input id="gm-only" type="checkbox" ${choice.gmOnly ? "checked" : ""} /> Visible par le MJ seulement</label>
-      <p class="note">Les effets que tu lances ne s'affichent pas chez les joueurs.</p>
-      <label class="option"><input id="players" type="checkbox" ${playersAllowed ? "checked" : ""} /> Les joueurs peuvent lancer des effets</label>
-      <p class="note">Ils ont alors l'onglet Lancer, et la roue sur les tokens qu'ils contrôlent.</p>
+      <h2>${t("settings.language")}</h2>
+      <select id="language" aria-label="${t("settings.language")}">
+        <option value="auto"${language === "auto" ? " selected" : ""}>${t("settings.languageAuto")}</option>
+        ${LANGUAGES.map((id) => `<option value="${id}"${language === id ? " selected" : ""}>${LANGUAGE_NAMES[id]}</option>`).join("")}
+      </select>
+    </section>`;
+  settingsPane.innerHTML = isGm
+    ? `
+    <section>
+      <h2>${t("settings.title")}</h2>
+      <label class="option"><input id="gm-only" type="checkbox" ${choice.gmOnly ? "checked" : ""} /> ${t("settings.gmOnly")}</label>
+      <p class="note">${t("settings.gmOnlyHelp")}</p>
+      <label class="option"><input id="players" type="checkbox" ${playersAllowed ? "checked" : ""} /> ${t("settings.players")}</label>
+      <p class="note">${t("settings.playersHelp")}</p>
     </section>
     <section>
-      <h2>Limites par scène</h2>
-      <label class="limit">Effets durables<input id="limit-durable" type="number" min="1" max="${MAX_LIMIT}" step="1" value="${limits.durable}" /></label>
-      <label class="limit">Programmes<input id="limit-programs" type="number" min="1" max="${MAX_LIMIT}" step="1" value="${limits.programs}" /></label>
+      <h2>${t("settings.limits")}</h2>
+      <label class="limit">${t("settings.limitDurable")}<input id="limit-durable" type="number" min="1" max="${MAX_LIMIT}" step="1" value="${limits.durable}" /></label>
+      <label class="limit">${t("settings.limitPrograms")}<input id="limit-programs" type="number" min="1" max="${MAX_LIMIT}" step="1" value="${limits.programs}" /></label>
       <div id="limit-warning">${limitWarning()}</div>
-      <p class="note">${DEFAULT_LIMIT} par défaut. Ce qui existe déjà au-delà d'une nouvelle limite reste en place, mais on ne peut plus en ajouter.</p>
-    </section>`;
+      <p class="note">${t("settings.limitsHelp", { limit: DEFAULT_LIMIT })}</p>
+    </section>
+    ${languageSection}`
+    : languageSection;
+  settingsPane.querySelector<HTMLSelectElement>("#language")!.onchange = async (event) => {
+    setLanguageSetting((event.target as HTMLSelectElement).value as Language | "auto");
+    await postUi("language");
+    // Tout le menu se redessine dans la nouvelle langue ; un programme en cours de saisie est gardé.
+    location.reload();
+  };
+  if (!isGm) return;
   const gmOnly = settingsPane.querySelector<HTMLInputElement>("#gm-only")!;
   gmOnly.onchange = () => {
     update({ gmOnly: gmOnly.checked });
