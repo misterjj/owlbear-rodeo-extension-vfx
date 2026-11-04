@@ -37,7 +37,7 @@ jusqu'à ce qu'on le retire, et se voit aussi pour ceux qui arrivent en cours de
 
 - Un clic sur un token l'y attache : il le suit et disparaît avec lui. Un nouveau clic l'éteint.
 - Un clic sur la carte l'y pose. Un mur se trace en deux clics et reste toujours sur la carte.
-- La liste **Effets durables** du panneau retire chacun d'eux, ou tous d'un coup (8 au plus par scène).
+- La liste **Effets durables** du panneau retire chacun d'eux, ou tous d'un coup (10 au plus par scène par défaut).
 
 Un sort durable de la roue s'allume et s'éteint d'un clic sur son bouton. Un nuage de ténèbres est
 presque opaque, y compris pour le MJ. Avec **Visible par le MJ seulement**, les joueurs ne le reçoivent
@@ -47,7 +47,7 @@ pas à l'écran. Ces effets ne connaissent pas les murs et ne changent rien aux 
 
 Un programme relance un effet tout seul, tant qu'il est actif : un canon qui tire toutes les 3
 secondes, ou des éclairs entre deux poteaux à intervalle variable. L'onglet **Programmes** les liste
-(8 au plus par scène). Chaque ligne se lance ou s'arrête avec ▶ et ■, et un groupe entier avec **▶ Tout** et **■ Tout**.
+(10 au plus par scène par défaut). Chaque ligne se lance ou s'arrête avec ▶ et ■, et un groupe entier avec **▶ Tout** et **■ Tout**.
 
 - **Effet :** élément, style, taille ou zone exacte.
 - **Rythme :** intervalle minimum et maximum, décalage du premier tir, nombre de tirs (vide : sans fin).
@@ -78,6 +78,7 @@ roue** y met l'effet réglé juste au-dessus. Les sorts sont enregistrés sur le
 ## Réglages du MJ
 
 - **Visible par le MJ seulement :** les joueurs ne voient rien et une téléportation ne bouge pas le token ;
+- **Limites par scène :** 10 effets durables et 10 programmes par défaut, de 1 à 100. Un avertissement rappelle le coût : un effet durable sollicite en continu la carte graphique de chaque joueur.
 - **Les joueurs peuvent lancer des effets :** l'outil apparaît chez eux, pour toute la salle. Ils ne
   déplacent par téléportation que les tokens qu'Owlbear les laisse déplacer à la main.
 

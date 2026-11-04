@@ -3,11 +3,11 @@ import {
   ELEMENTS,
   ELEMENT_IDS,
   FX_DURABLE_KEY,
-  FX_ROOM_KEY,
   FX_SPELLS_KEY,
   FX_TOOL_ID,
   FX_UI_CHANNEL,
-  MAX_DURABLE,
+  DEFAULT_LIMIT,
+  MAX_LIMIT,
   MAX_FAVORITES,
   MAX_NAME_LENGTH,
   MAX_SPELLS,
@@ -21,6 +21,10 @@ import {
   editSpell,
   exactZoneLabel,
   isDurable,
+  limitsIn,
+  parseLimit,
+  playersAllowedIn,
+  roomSettingsWith,
   loadChoice,
   loadFavorites,
   matchesFavorite,
@@ -32,6 +36,7 @@ import {
   type DurableEntry,
   type ElementId,
   type Favorite,
+  type FxLimits,
   type SizeId,
   type StyleId,
 } from "./fx";
@@ -47,6 +52,7 @@ let isGm = false;
 let playersAllowed = false;
 let unit = "cases";
 let running: DurableEntry[] = [];
+let limits: FxLimits = { durable: DEFAULT_LIMIT, programs: DEFAULT_LIMIT };
 let compact = false;
 let toolActive = false;
 let listening = false;
@@ -245,8 +251,8 @@ function runningList() {
         )
         .join("")}
       ${running.length > 1 ? `<button type="button" class="stop-all" id="stop-all">Tout retirer</button>` : ""}`;
-  if (compact) return `<section><h2>Effets durables (${running.length}/${MAX_DURABLE})</h2>${list}</section>`;
-  return foldHtml("running", "Effets durables", `${running.length}/${MAX_DURABLE} actif${running.length > 1 ? "s" : ""}`, list);
+  if (compact) return `<section><h2>Effets durables (${running.length}/${limits.durable})</h2>${list}</section>`;
+  return foldHtml("running", "Effets durables", `${running.length}/${limits.durable} actif${running.length > 1 ? "s" : ""}`, list);
 }
 
 /** Retire de la liste à jour : un autre joueur a pu y toucher depuis son affichage. */
@@ -708,6 +714,18 @@ export async function setupCast(container: HTMLElement, gm: boolean) {
   render();
 }
 
+function limitWarning() {
+  const warnings = [
+    limits.durable > DEFAULT_LIMIT
+      ? "Chaque effet durable est recalculé en continu par la carte graphique de chaque joueur : au-delà de 10, une machine modeste peut ralentir. Teste chez le joueur le moins bien équipé."
+      : "",
+    limits.programs > DEFAULT_LIMIT
+      ? "Beaucoup de programmes pèsent peu sur les machines, mais la scène les enregistre tous, et au plus 3 tirs partent en même temps : les suivants sont ignorés."
+      : "",
+  ].filter(Boolean);
+  return warnings.map((text) => `<p class="warning">⚠ ${text}</p>`).join("");
+}
+
 function renderSettings() {
   if (!settingsPane) return;
   settingsPane.innerHTML = `
@@ -717,6 +735,13 @@ function renderSettings() {
       <p class="note">Les effets que tu lances ne s'affichent pas chez les joueurs.</p>
       <label class="option"><input id="players" type="checkbox" ${playersAllowed ? "checked" : ""} /> Les joueurs peuvent lancer des effets</label>
       <p class="note">Ils ont alors l'onglet Lancer, et la roue sur les tokens qu'ils contrôlent.</p>
+    </section>
+    <section>
+      <h2>Limites par scène</h2>
+      <label class="limit">Effets durables<input id="limit-durable" type="number" min="1" max="${MAX_LIMIT}" step="1" value="${limits.durable}" /></label>
+      <label class="limit">Programmes<input id="limit-programs" type="number" min="1" max="${MAX_LIMIT}" step="1" value="${limits.programs}" /></label>
+      <div id="limit-warning">${limitWarning()}</div>
+      <p class="note">${DEFAULT_LIMIT} par défaut. Ce qui existe déjà au-delà d'une nouvelle limite reste en place, mais on ne peut plus en ajouter.</p>
     </section>`;
   const gmOnly = settingsPane.querySelector<HTMLInputElement>("#gm-only")!;
   gmOnly.onchange = () => {
@@ -727,22 +752,55 @@ function renderSettings() {
   const players = settingsPane.querySelector<HTMLInputElement>("#players")!;
   players.onchange = () => {
     playersAllowed = players.checked;
-    OBR.room.setMetadata({ [FX_ROOM_KEY]: { players: players.checked } }).catch((error) => {
-      warn(error);
-      playersAllowed = !players.checked;
-      players.checked = playersAllowed;
-    });
+    OBR.room
+      .getMetadata()
+      .then((metadata) => OBR.room.setMetadata(roomSettingsWith(metadata, { players: players.checked })))
+      .catch((error) => {
+        warn(error);
+        playersAllowed = !players.checked;
+        players.checked = playersAllowed;
+      });
   };
+  for (const key of ["durable", "programs"] as const) {
+    const input = settingsPane.querySelector<HTMLInputElement>(`#limit-${key}`)!;
+    input.onchange = () => {
+      const previous = limits;
+      limits = { ...limits, [key]: parseLimit(input.value, limits[key]) };
+      input.value = String(limits[key]);
+      settingsPane!.querySelector("#limit-warning")!.innerHTML = limitWarning();
+      renderRunning();
+      OBR.room
+        .getMetadata()
+        .then((metadata) => OBR.room.setMetadata(roomSettingsWith(metadata, { limits })))
+        .catch((error) => {
+          warn(error);
+          limits = previous;
+          input.value = String(limits[key]);
+          settingsPane!.querySelector("#limit-warning")!.innerHTML = limitWarning();
+        });
+    };
+  }
 }
 
 export function setupSettings(container: HTMLElement, allowed: boolean) {
   settingsPane = container;
   playersAllowed = allowed;
   renderSettings();
-  OBR.room.onMetadataChange((metadata) => {
-    const next = (metadata[FX_ROOM_KEY] as { players?: unknown } | undefined)?.players === true;
-    if (next === playersAllowed) return;
-    playersAllowed = next;
-    renderSettings();
-  });
+}
+
+/** Les limites et l'autorisation des joueurs viennent de la salle, y compris pour un joueur. */
+export async function watchRoomSettings() {
+  const read = (metadata: Metadata) => {
+    const nextLimits = limitsIn(metadata);
+    const nextPlayers = playersAllowedIn(metadata);
+    const changed = nextPlayers !== playersAllowed || nextLimits.durable !== limits.durable || nextLimits.programs !== limits.programs;
+    limits = nextLimits;
+    playersAllowed = nextPlayers;
+    if (!changed) return;
+    renderRunning();
+    // Une saisie en cours dans les réglages n'est pas écrasée par un écho de ce qu'on vient d'enregistrer.
+    if (!settingsPane?.contains(document.activeElement)) renderSettings();
+  };
+  read(await OBR.room.getMetadata());
+  OBR.room.onMetadataChange(read);
 }

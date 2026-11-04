@@ -1,6 +1,7 @@
 import {
   CHAIN_HOP_MS,
   ELEMENTS,
+  MAX_LIMIT,
   SIZES,
   STYLES,
   isExact,
@@ -19,7 +20,6 @@ export const FX_PROGRAMS_KEY = `${PLUGIN_ID}/programmes`;
 /** Échanges entre la fenêtre des programmes et l'arrière-plan, chez le MJ seulement. */
 export const FX_PROGRAM_CHANNEL = `${PLUGIN_ID}/programme`;
 
-export const MAX_PROGRAMS = 8;
 export const MAX_ANCHORS = 8;
 /** En dessous, un programme enchaînerait plus d'effets que la limite ne peut en jouer. */
 export const MIN_INTERVAL = 0.2;
@@ -112,7 +112,7 @@ export function programsIn(metadata: Record<string, unknown>): Program[] {
   if (!Array.isArray(saved)) return [];
   return saved
     .filter(isProgram)
-    .slice(0, MAX_PROGRAMS)
+    .slice(0, MAX_LIMIT)
     .map((program) => ({
       ...program,
       ...normalizeTiming(program),

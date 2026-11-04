@@ -9,7 +9,11 @@ import {
   STYLE_IDS,
   MAX_FAVORITES,
   MAX_SPELLS,
-  MAX_DURABLE,
+  DEFAULT_LIMIT,
+  MAX_LIMIT,
+  limitsIn,
+  parseLimit,
+  roomSettingsWith,
   canBeDurable,
   castsOnSelf,
   durableChanges,
@@ -556,8 +560,8 @@ describe("effets durables", () => {
   });
 
   it("ne garde pas plus d'effets que la limite", () => {
-    const many = Array.from({ length: MAX_DURABLE + 2 }, (_, i) => ({ ...entry, id: `e${i}` }));
-    expect(durablesIn({ [key]: many })).toHaveLength(MAX_DURABLE);
+    const many = Array.from({ length: MAX_LIMIT + 2 }, (_, i) => ({ ...entry, id: `e${i}` }));
+    expect(durablesIn({ [key]: many })).toHaveLength(MAX_LIMIT);
   });
 
   it("reconnaît le même effet déjà allumé, quelle que soit sa taille", () => {
@@ -601,7 +605,7 @@ describe("effets durables", () => {
   });
 
   it("limite leur nombre et rend les ténèbres presque opaques", () => {
-    expect(MAX_DURABLE).toBeGreaterThan(0);
+    expect(DEFAULT_LIMIT).toBe(10);
     expect(ELEMENTS.tenebres.density).toBeGreaterThan(0.9);
     expect(ELEMENTS.poison.density).toBeLessThan(0.7);
   });
@@ -619,6 +623,33 @@ describe("manifest", () => {
   it("respecte la limite de description d'Owlbear", () => {
     const manifest = JSON.parse(readFileSync("public/manifest.json", "utf8"));
     expect(manifest.description.length).toBeLessThanOrEqual(128);
+  });
+});
+
+describe("limites réglables", () => {
+  const room = (limits: unknown) => ({ "vfx-owlbear/reglages": { players: true, limits } });
+
+  it("vaut 10 par défaut, et tant que la valeur est illisible", () => {
+    expect(limitsIn({})).toEqual({ durable: 10, programs: 10 });
+    expect(limitsIn(room({ durable: "x", programs: 0 }))).toEqual({ durable: 10, programs: 10 });
+    expect(limitsIn(room({ durable: 2.5, programs: MAX_LIMIT + 1 }))).toEqual({ durable: 10, programs: 10 });
+    expect(limitsIn(room({ durable: 25, programs: 1 }))).toEqual({ durable: 25, programs: 1 });
+  });
+
+  it("ramène une saisie dans les bornes et ignore ce qui est illisible", () => {
+    expect(parseLimit("25", 10)).toBe(25);
+    expect(parseLimit("0", 10)).toBe(1);
+    expect(parseLimit("500", 10)).toBe(MAX_LIMIT);
+    expect(parseLimit("7.6", 10)).toBe(8);
+    expect(parseLimit("", 10)).toBe(10);
+    expect(parseLimit("abc", 12)).toBe(12);
+  });
+
+  it("ne perd pas les autres réglages de la salle", () => {
+    const limits = { durable: 5, programs: 6 };
+    expect(roomSettingsWith(room({ durable: 1, programs: 1 }), { limits })).toEqual(room(limits));
+    expect(roomSettingsWith(room(limits), { players: false })).toEqual({ "vfx-owlbear/reglages": { players: false, limits } });
+    expect(playersAllowedIn(roomSettingsWith({}, { limits }))).toBe(false);
   });
 });
 

@@ -1,7 +1,7 @@
+import { MAX_LIMIT } from "../src/fx";
 import { describe, expect, it } from "vitest";
 import {
   MAX_ANCHORS,
-  MAX_PROGRAMS,
   MIN_INTERVAL,
   chainHopDelay,
   chainHops,
@@ -84,8 +84,8 @@ describe("relecture de la liste partagée", () => {
   });
 
   it("respecte les limites", () => {
-    const many = Array.from({ length: MAX_PROGRAMS + 3 }, (_, i) => ({ ...base, id: `p${i}` }));
-    expect(programsIn({ [key]: many })).toHaveLength(MAX_PROGRAMS);
+    const many = Array.from({ length: MAX_LIMIT + 3 }, (_, i) => ({ ...base, id: `p${i}` }));
+    expect(programsIn({ [key]: many })).toHaveLength(MAX_LIMIT);
     const anchors = Array.from({ length: MAX_ANCHORS + 3 }, (_, i) => point(i));
     expect(programsIn({ [key]: [{ ...base, anchors }] })[0].anchors).toHaveLength(MAX_ANCHORS);
   });

@@ -810,8 +810,39 @@ export const canBeDurable = (style: StyleId) => DURABLE_STYLES.includes(style);
 export const isDurable = ({ style, durable }: { style: StyleId; durable?: boolean }) =>
   durable === true && canBeDurable(style);
 
-/** Chaque effet durable est recalculé en permanence par tous les joueurs : leur nombre est limité. */
-export const MAX_DURABLE = 8;
+/**
+ * Chaque effet durable est recalculé en permanence par tous les joueurs : leur nombre est limité, et
+ * le MJ peut changer cette limite selon le matériel de sa table.
+ */
+export const DEFAULT_LIMIT = 10;
+/** Garde-fou : les listes sont stockées dans la scène, et lues telles quelles chez tous les joueurs. */
+export const MAX_LIMIT = 100;
+
+export interface FxLimits {
+  durable: number;
+  programs: number;
+}
+
+const readLimit = (value: unknown) =>
+  typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= MAX_LIMIT ? value : DEFAULT_LIMIT;
+
+export function limitsIn(metadata: Record<string, unknown>): FxLimits {
+  const settings = metadata[FX_ROOM_KEY] as { limits?: Partial<Record<keyof FxLimits, unknown>> } | undefined;
+  return { durable: readLimit(settings?.limits?.durable), programs: readLimit(settings?.limits?.programs) };
+}
+
+/** Une saisie hors limites revient à la valeur permise la plus proche ; illisible, elle ne change rien. */
+export function parseLimit(raw: string, current: number) {
+  const value = Math.round(Number(raw));
+  if (raw.trim() === "" || !Number.isFinite(value)) return current;
+  return Math.min(MAX_LIMIT, Math.max(1, value));
+}
+
+/** Réglages de la salle après modification : ce qui n'est pas changé est conservé. */
+export function roomSettingsWith(metadata: Record<string, unknown>, change: { players?: boolean; limits?: FxLimits }) {
+  const current = (metadata[FX_ROOM_KEY] ?? {}) as Record<string, unknown>;
+  return { [FX_ROOM_KEY]: { ...current, ...change } };
+}
 
 /**
  * Description partagée d'un effet durable. Owlbear ne garde pas les effets dans la scène partagée :
@@ -862,7 +893,7 @@ const isDurableEntry = (value: unknown): value is DurableEntry => {
 
 export function durablesIn(metadata: Record<string, unknown>): DurableEntry[] {
   const saved = metadata[FX_DURABLE_KEY];
-  return Array.isArray(saved) ? saved.filter(isDurableEntry).slice(0, MAX_DURABLE) : [];
+  return Array.isArray(saved) ? saved.filter(isDurableEntry).slice(0, MAX_LIMIT) : [];
 }
 
 /** Même effet déjà attaché à ce token : un nouveau clic sert à l'éteindre. */

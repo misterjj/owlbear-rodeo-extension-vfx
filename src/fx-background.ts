@@ -21,7 +21,7 @@ import {
   FX_UI_CHANNEL,
   FX_WHEEL_CHANNEL,
   FX_WHEEL_ID,
-  MAX_DURABLE,
+  DEFAULT_LIMIT,
   STYLES,
   arrowDuration,
   buildMessage,
@@ -41,6 +41,7 @@ import {
   parseFxMessage,
   parseWheelCast,
   playerCooldownOver,
+  limitsIn,
   playersAllowedIn,
   previewOutline,
   projectileDuration,
@@ -436,6 +437,7 @@ const randomSeed = () => Math.random() * 100;
 
 let role: "GM" | "PLAYER" = "PLAYER";
 let playersAllowed = false;
+let durableLimit = DEFAULT_LIMIT;
 
 /** Zones des tokens, gardées tant que rien ne bouge : l'aperçu les lit à chaque mouvement. */
 let tokenAreas: Promise<TokenArea[]> | undefined;
@@ -896,8 +898,8 @@ async function placeDurable(
       return;
     }
   }
-  if (entries.length >= MAX_DURABLE) {
-    await OBR.notification.show(`${MAX_DURABLE} effets durables au plus : retires-en un d'abord.`);
+  if (entries.length >= durableLimit) {
+    await OBR.notification.show(`${durableLimit} effets durables au plus : retires-en un d'abord, ou change la limite dans Réglages.`);
     return;
   }
   const entry: DurableEntry = {
@@ -1376,12 +1378,13 @@ export async function setupFx() {
   });
   OBR.room.onMetadataChange((metadata) => {
     playersAllowed = playersAllowedIn(metadata);
+    durableLimit = limitsIn(metadata).durable;
     syncTool();
   });
-  [role, playersAllowed] = await Promise.all([
-    OBR.player.getRole(),
-    OBR.room.getMetadata().then(playersAllowedIn),
-  ]);
+  const room = await OBR.room.getMetadata();
+  role = await OBR.player.getRole();
+  playersAllowed = playersAllowedIn(room);
+  durableLimit = limitsIn(room).durable;
   syncTool();
   scheduleReconcile();
 }

@@ -1,12 +1,11 @@
 import OBR, { type Metadata } from "@owlbear-rodeo/sdk";
-import { ELEMENTS, STYLES, exactZoneLabel, isExact, type ElementId, type SizeId, type StyleId } from "./fx";
+import { DEFAULT_LIMIT, ELEMENTS, STYLES, exactZoneLabel, isExact, limitsIn, type ElementId, type SizeId, type StyleId } from "./fx";
 import { elementColor, elementGrid, elementValue, pickerRow, sizeRow, styleGrid, type PickerId } from "./effect-fields";
 import { STYLE_ICONS } from "./fx-icons";
 import {
   FX_PROGRAMS_KEY,
   FX_PROGRAM_CHANNEL,
   MAX_ANCHORS,
-  MAX_PROGRAMS,
   MIN_INTERVAL,
   anchorsNeeded,
   groupNames,
@@ -31,6 +30,7 @@ let problem = "";
 let confirmingDelete: string | undefined;
 let unit = "cases";
 let openPicker: PickerId | undefined;
+let programLimit = DEFAULT_LIMIT;
 let compact = false;
 /** Le menu Effets est rechargé quand on le rouvre : la saisie en cours y survit. */
 const DRAFT_STORAGE_KEY = "vfx:programme-en-cours";
@@ -176,8 +176,8 @@ function renderList() {
   const loose = programs.filter(({ group }) => !group);
   app.innerHTML = `
     <header class="bar">
-      <strong>Programmes (${programs.length}/${MAX_PROGRAMS})</strong>
-      <button type="button" class="btn primary" id="new" ${programs.length >= MAX_PROGRAMS ? "disabled" : ""}>+ Nouveau</button>
+      <strong>Programmes (${programs.length}/${programLimit})</strong>
+      <button type="button" class="btn primary" id="new" ${programs.length >= programLimit ? "disabled" : ""} title="${programs.length >= programLimit ? "Limite atteinte : change-la dans Réglages" : ""}">+ Nouveau</button>
     </header>
     ${programs.length ? "" : `<p class="empty">Un programme relance un effet tout seul, à ton rythme : un canon toutes les 3 secondes, des éclairs entre deux poteaux. Rien ne part tant que tu ne l'as pas activé.</p>`}
     ${groups.map((group) => groupBlock(group, programs.filter((p) => p.group === group))).join("")}
@@ -474,6 +474,11 @@ export async function setupPrograms(container: HTMLElement) {
   // Le menu reste ouvert d'une scène à l'autre : la liste doit suivre.
   OBR.scene.onReadyChange(async (ready) => {
     programs = ready ? programsIn(await OBR.scene.getMetadata()) : [];
+    if (compact || !draft) renderList();
+  });
+  programLimit = limitsIn(await OBR.room.getMetadata()).programs;
+  OBR.room.onMetadataChange((metadata) => {
+    programLimit = limitsIn(metadata).programs;
     if (compact || !draft) renderList();
   });
   if (draft) post({ type: "draft", anchors: draft.anchors });

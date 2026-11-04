@@ -1,6 +1,6 @@
 import OBR from "@owlbear-rodeo/sdk";
 import { FX_TARGET_KEY, FX_UI_CHANNEL, playersAllowedIn } from "./fx";
-import { setCastCompact, setupCast, setupSettings, targetToken } from "./panel";
+import { setCastCompact, setupCast, setupSettings, targetToken, watchRoomSettings } from "./panel";
 import { setProgramsCompact, setupPrograms } from "./programmes";
 import "./panel.css";
 import "./programmes.css";
@@ -105,6 +105,7 @@ OBR.onReady(async () => {
   const pane = (id: string) => app.querySelector<HTMLDivElement>(`#${id}`)!;
   setCastCompact(compact);
   setProgramsCompact(compact);
+  await watchRoomSettings();
   await setupCast(pane("tab-cast"), isGm);
   const ensureGmTabs = async () => {
     if (!isGm || programsReady) return;
