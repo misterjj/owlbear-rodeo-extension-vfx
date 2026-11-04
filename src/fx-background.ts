@@ -816,19 +816,20 @@ function runPrograms() {
 }
 
 const finishing = new Set<string>();
+/** Une écriture à la fois : deux séries finies ensemble effaceraient chacune la fin de l'autre. */
+let finishingPrograms = Promise.resolve();
 
 /** Série terminée : le MJ le note pour tout le monde, et le programme peut être relancé. */
 function finishProgram({ id, startedAt }: Program) {
   const key = `${id}/${startedAt}`;
   if (role !== "GM" || finishing.has(key)) return;
   finishing.add(key);
-  OBR.scene
-    .getMetadata()
-    .then((metadata) => {
-      const current = programsIn(metadata);
+  finishingPrograms = finishingPrograms
+    .then(async () => {
+      const current = programsIn(await OBR.scene.getMetadata());
       // S'il a été relancé entre-temps, ce n'est plus la même série.
-      if (!current.some((p) => p.id === id && p.startedAt === startedAt)) return undefined;
-      return OBR.scene.setMetadata({
+      if (!current.some((p) => p.id === id && p.startedAt === startedAt)) return;
+      await OBR.scene.setMetadata({
         [FX_PROGRAMS_KEY]: withActive(current, [id], false, Date.now()),
       });
     })
