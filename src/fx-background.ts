@@ -88,6 +88,7 @@ import {
   DOME_SKSL,
   DURABLE_SKSL,
   EXPLOSION_SKSL,
+  FLAME_SKSL,
   HEAL_SKSL,
   METEOR_SKSL,
   PROJECTILE_SKSL,
@@ -387,6 +388,14 @@ async function play(message: FxMessage, limit: number) {
         scaledDuration(2600, scale),
       );
       break;
+    case "flamme":
+      await animate(
+        FLAME_SKSL,
+        at,
+        [...common, { name: "radius", value: dpi * STYLES.flamme.reach * scale }],
+        scaledDuration(3000, scale),
+      );
+      break;
     case "transformation":
       await animate(
         TRANSFORMATION_SKSL,
@@ -529,6 +538,7 @@ function durableSpec(entry: DurableEntry, at: Point, dpi: number) {
     case "aura":
     case "dome":
     case "transformation":
+    case "flamme":
       return { sksl: DURABLE_SKSL[style], position: at, uniforms: [...common, radius] };
     case "cube":
       return {

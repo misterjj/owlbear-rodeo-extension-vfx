@@ -17,6 +17,7 @@ export const STYLE_ICONS: Record<StyleId, string> = {
   dome: '<path d="M3 18a9 9 0 0 1 18 0z"/><path d="M8 11c1-1.5 2.5-2 4-2"/>',
   cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/>',
   nuage: '<path d="M7 19a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 9.5 4.8 4.8 0 0 1 17.5 19z"/>',
+  flamme: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
   aura: '<circle cx="12" cy="12" r="3.5"/><circle cx="12" cy="12" r="9" stroke-dasharray="3.5 3"/>',
   soin: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>',
   transformation: '<path d="M12 2c1 4 7 7 7 13a7 7 0 0 1-14 0c0-3 2-5 3-7 1 1 2 2 4-6z"/><path d="M12 13c1 2 3 3 3 5a3 3 0 0 1-6 0c0-1 1-2 3-5z"/>',

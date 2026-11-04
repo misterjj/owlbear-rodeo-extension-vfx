@@ -301,7 +301,7 @@ describe("réglages", () => {
   });
 
   it("propose tous les styles, et demande un lanceur seulement à ceux qui partent d'un point", () => {
-    expect(STYLE_IDS).toHaveLength(19);
+    expect(STYLE_IDS).toHaveLength(20);
     expect(STYLE_IDS.filter((id) => STYLES[id].directed)).toEqual([
       "fleche",
       "projectile",
@@ -335,7 +335,7 @@ describe("géométrie", () => {
 
   it("place tous les effets avec le repère fourni par Owlbear", () => {
     const sources = Object.values(shaders).filter((value) => typeof value === "string");
-    expect(sources).toHaveLength(17);
+    expect(sources).toHaveLength(18);
     for (const sksl of sources) {
       expect(sksl).toContain("uniform mat3 model;");
       expect(sksl).toContain("uniform float t;");

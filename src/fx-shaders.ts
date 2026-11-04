@@ -938,6 +938,72 @@ half4 main(float2 coord) {
 }
 `;
 
+const flame = (timing: Timing) => `${common(timing, 3)}
+uniform float radius;
+
+// Vue plongeante à 75° : le sol est à peine écrasé et une hauteur ne monte à l'écran que d'un quart.
+const float FLATTEN = 0.966;
+const float LIFT = 0.259;
+const float TALL = 2.2;
+
+half4 main(float2 coord) {
+  vec2 p = local(coord) / radius;
+  if (length(p + vec2(0.0, 0.25)) > 2.0) return half4(0.0);
+
+  float now = clock();
+  float grow = smoothstep(0.0, 0.14, life());
+  float fade = 1.0 - smoothstep(0.78, 1.0, life());
+  float size = max(mix(0.25, 1.0, grow), 0.001);
+  float breath = 0.96 + 0.04 * sin(now * 14.0 + seed);
+
+  // Sol : lueur et braises autour du foyer.
+  vec2 floorAt = vec2(p.x, p.y / FLATTEN);
+  float ground = length(floorAt);
+  float glow = exp(-ground * ground * 1.1) * (0.34 + 0.05 * sin(now * 16.0 + seed)) * (1.0 - smoothstep(1.0, 1.7, ground));
+  float ring = 1.0 - smoothstep(0.0, 0.26, abs(ground - 1.06 * size));
+  float embers = ring * smoothstep(0.66, 0.76, fbm(floorAt * 11.0 + vec2(seed, now * 1.5))) * 0.8;
+
+  vec3 color = palette[1] * glow * grow * fade;
+  float alpha = glow * grow * fade;
+  float emberAlpha = clamp(embers, 0.0, 1.0) * grow * fade;
+  color = ramp(0.65) * emberAlpha + color * (1.0 - emberAlpha);
+  alpha = emberAlpha + alpha * (1.0 - emberAlpha);
+
+  // Un disque au sol dont le côté haut de l'écran s'allonge en langues : un quart de leur hauteur réelle.
+  float x = (p.x + (noise(vec2(p.y * 1.8 + now * 2.6, seed)) - 0.5) * 0.22 * (1.0 - smoothstep(-1.2, 0.2, p.y))) / size;
+  float y = p.y / size;
+  float crest = TALL * LIFT * (0.45 + 0.85 * noise(vec2(x * 2.6 + seed, now * 1.2)));
+  float r = length(vec2(x, y / (y < 0.0 ? FLATTEN + crest : FLATTEN))) / breath;
+  float top = 1.0 - smoothstep(-0.9, 0.25, y);
+  float tongues = fbm(vec2(x * 3.4 + seed, y * 1.45 + now * 3.2));
+  float licks = noise(vec2(x * 8.5 - seed, y * 2.4 + now * 5.4));
+  float edge = 1.0 - r + (tongues - 0.5) * mix(0.55, 1.15, top) + (licks - 0.5) * mix(0.12, 0.5, top);
+  float flameAlpha = smoothstep(0.0, 0.14, edge) * (0.84 + tongues * 0.24);
+
+  // Le plus chaud au foyer, le plus froid au bout des langues, avec des veines plus sombres.
+  float heat = clamp(edge * 1.0 + (tongues - 0.5) * 1.0 + (1.0 - smoothstep(0.0, 0.7, length(vec2(x, y)))) * 0.25 - top * 0.12, 0.0, 1.0);
+  float bodyAlpha = clamp(flameAlpha, 0.0, 1.0) * fade;
+  color = ramp(heat) * bodyAlpha + color * (1.0 - bodyAlpha);
+  alpha = bodyAlpha + alpha * (1.0 - bodyAlpha);
+
+  // Étincelles qui montent : elles restent au-dessus de leur point de départ, peu décalées à l'écran.
+  float sparks = 0.0;
+  for (int i = 0; i < 12; i++) {
+    float index = float(i) + seed;
+    float angle = hash(vec2(index, 2.7)) * 6.2832;
+    float start = sqrt(hash(vec2(index, 5.3))) * 0.95;
+    float spark = fract(now * (0.8 + hash(vec2(index, 4.1)) * 0.8) + hash(vec2(index, 7.9)));
+    vec2 at = vec2(cos(angle), sin(angle) * FLATTEN) * start * (1.0 + spark * 0.25) - vec2(0.0, spark * 0.85);
+    vec2 offset = p - at;
+    sparks += exp(-dot(offset, offset) * 2200.0) * smoothstep(0.0, 0.12, spark) * (1.0 - smoothstep(0.55, 1.0, spark));
+  }
+  float sparkAlpha = clamp(sparks, 0.0, 1.0) * grow * fade;
+  color = palette[2] * sparkAlpha + color * (1.0 - sparkAlpha);
+  alpha = sparkAlpha + alpha * (1.0 - sparkAlpha);
+  return half4(color, alpha);
+}
+`;
+
 export const RAIN_SKSL = rain(BRIEF);
 export const AURA_SKSL = aura(BRIEF);
 export const WALL_SKSL = wall(BRIEF);
@@ -945,6 +1011,7 @@ export const DOME_SKSL = dome(BRIEF);
 export const CUBE_SKSL = cube(BRIEF);
 export const CLOUD_SKSL = cloud(BRIEF);
 export const TRANSFORMATION_SKSL = transformation(BRIEF);
+export const FLAME_SKSL = flame(BRIEF);
 
 /** Versions continues des styles qui peuvent durer. */
 export const DURABLE_SKSL = {
@@ -955,4 +1022,5 @@ export const DURABLE_SKSL = {
   cube: cube(DURABLE),
   nuage: cloud(DURABLE),
   transformation: transformation(DURABLE),
+  flamme: flame(DURABLE),
 };

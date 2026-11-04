@@ -15,12 +15,12 @@ the map. Your last choice is kept. Element and style open with a click, one at a
 - **Element:** fire, ice, lightning, poison, acid, darkness, light, force, necrotic, psychic, thunder,
   physical, blood, water, earth, wind.
 - **Style:**
-  - strike, claws, bite, explosion, meteor, rain, dome, cube, cloud, aura, transformation and healing are
+  - strike, claws, bite, explosion, meteor, flame, rain, dome, cube, cloud, aura, transformation and healing are
     cast with one click on the map;
   - arrow, projectile, beam, cone, wall and teleport take two clicks: the starting point, then the target
     or direction (`Escape` to cancel);
   - chain starts from the caster, then jumps to each new target you click (`Escape` to finish).
-- **Size:** XS, S, M, L or XL. For area spells (explosion, meteor, rain, dome, cube, cloud, aura,
+- **Size:** XS, S, M, L or XL. For area spells (explosion, meteor, flame, rain, dome, cube, cloud, aura,
   transformation, healing, cone), an exact radius, length or side can be given in the scene's unit.
 
 The **–** button shrinks the window to the essentials: the current effect, favorites to switch to, and
@@ -37,7 +37,7 @@ Reusing an existing name replaces it.
 
 ## Lasting effects
 
-Aura, transformation, rain, dome, cube, cloud and wall can last: check **Lasting** in **More options**. The
+Aura, transformation, flame, rain, dome, cube, cloud and wall can last: check **Lasting** in **More options**. The
 effect then stays until removed, and is also visible to people who join during the game.
 
 - Clicking a token attaches it: it follows the token and disappears with it. Clicking again turns it off.

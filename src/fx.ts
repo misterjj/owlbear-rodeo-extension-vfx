@@ -282,6 +282,7 @@ export const STYLES = {
   cube: { directed: false, reach: 4, exactZone: true },
   nuage: { directed: false, reach: 2.5, exactZone: true },
   aura: { directed: false, reach: 1.5, exactZone: true },
+  flamme: { directed: false, reach: 1, exactZone: true },
   transformation: { directed: false, reach: 1.2, exactZone: true },
   soin: { directed: false, reach: 1, exactZone: true },
   teleportation: { directed: true, reach: 0, exactZone: false },
@@ -786,11 +787,11 @@ export function readableColor([r, g, b]: Rgb): Rgb {
 export const STYLE_GROUPS: { label: TextKey; styles: StyleId[] }[] = [
   { label: "group.melee", styles: ["coup", "griffes", "morsure"] },
   { label: "group.ranged", styles: ["fleche", "projectile", "rayon", "chaine"] },
-  { label: "group.areas", styles: ["explosion", "meteore", "cone", "mur", "dome", "cube", "pluie", "nuage"] },
+  { label: "group.areas", styles: ["explosion", "meteore", "cone", "flamme", "mur", "dome", "cube", "pluie", "nuage"] },
   { label: "group.self", styles: ["aura", "transformation", "soin", "teleportation"] },
 ];
 
-const DURABLE_STYLES: readonly StyleId[] = ["aura", "pluie", "dome", "cube", "mur", "nuage", "transformation"];
+const DURABLE_STYLES: readonly StyleId[] = ["aura", "pluie", "dome", "cube", "mur", "nuage", "transformation", "flamme"];
 
 export const canBeDurable = (style: StyleId) => DURABLE_STYLES.includes(style);
 
