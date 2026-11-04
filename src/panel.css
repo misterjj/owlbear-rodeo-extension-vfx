@@ -25,12 +25,14 @@ html { color-scheme: dark; }
 #tab-settings .note { margin: 0 0 10px 24px; }
 .off-tool { display: flex; align-items: center; gap: 8px; background: rgb(255 180 80 / 0.16); }
 .off-tool span { flex: 1; }
-.off-tool button, .wide-button, .spell-row button, .edit-actions button {
+.hint p { margin: 0; }
+.hint-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; margin-top: 6px; }
+.hint-actions button, .off-tool button, .wide-button, .spell-row button, .edit-actions button {
   all: unset; box-sizing: border-box; min-height: 26px; padding: 3px 9px; border-radius: 6px; cursor: pointer;
   background: rgb(255 255 255 / 0.12); font-size: 12px; text-align: center;
 }
-.off-tool button:hover, .wide-button:hover, .spell-row button:hover, .edit-actions button:hover { background: rgb(255 255 255 / 0.2); }
-.off-tool button:focus-visible, .wide-button:focus-visible, .spell-row button:focus-visible, .edit-actions button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.hint-actions button:hover, .off-tool button:hover, .wide-button:hover, .spell-row button:hover, .edit-actions button:hover { background: rgb(255 255 255 / 0.2); }
+.hint-actions button:focus-visible, .off-tool button:focus-visible, .wide-button:focus-visible, .spell-row button:focus-visible, .edit-actions button:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
 .wide-button { display: block; width: 100%; margin-top: 5px; }
 .wide-button[aria-pressed="true"] { background: rgb(187 153 255 / 0.3); }
 .spell-row { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; font-size: 12px; }

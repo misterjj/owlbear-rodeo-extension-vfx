@@ -56,6 +56,8 @@ let running: DurableEntry[] = [];
 let limits: FxLimits = { durable: DEFAULT_LIMIT, programs: DEFAULT_LIMIT, simultaneous: DEFAULT_LIMIT };
 let compact = false;
 let toolActive = false;
+/** Un premier point est posé sur la carte et attend le second. */
+let aimingNow = false;
 let listening = false;
 
 /** Token dont la roue se configure, et sort de cette roue en cours de modification. */
@@ -129,7 +131,13 @@ function hint() {
 /** Une fois un autre outil pris en main, le clic sur la carte ne lance plus rien : ça doit se voir. */
 function bannerHtml() {
   return toolActive
-    ? `<p class="hint" id="hint">${hint()}</p>`
+    ? `<div class="hint">
+         <p id="hint">${hint()}</p>
+         <div class="hint-actions">
+           ${aimingNow ? `<button type="button" id="cancel-aim">${t("banner.cancelAim")}</button>` : ""}
+           <button type="button" id="stop-cast">${t("banner.stop")}</button>
+         </div>
+       </div>`
     : `<div class="hint off-tool">
          <span>${t("banner.offTool")}</span>
          <button type="button" id="arm">${t("banner.resume")}</button>
@@ -142,6 +150,10 @@ function renderBanner() {
   banner.innerHTML = bannerHtml();
   const rearm = banner.querySelector<HTMLButtonElement>("#arm");
   if (rearm) rearm.onclick = () => postUi("arm");
+  const cancelAim = banner.querySelector<HTMLButtonElement>("#cancel-aim");
+  if (cancelAim) cancelAim.onclick = () => postUi("cancel-aim");
+  const stop = banner.querySelector<HTMLButtonElement>("#stop-cast");
+  if (stop) stop.onclick = () => postUi("stop-cast");
 }
 
 const usesExact = () => choice.exact !== null && STYLES[choice.style].exactZone;
@@ -678,6 +690,13 @@ export async function setupCast(container: HTMLElement, gm: boolean) {
     toolActive = (await OBR.tool.getActiveTool()) === FX_TOOL_ID;
     OBR.tool.onToolChange((id) => {
       toolActive = id === FX_TOOL_ID;
+      if (!toolActive) aimingNow = false;
+      renderBanner();
+    });
+    OBR.broadcast.onMessage(FX_UI_CHANNEL, ({ data }) => {
+      const message = data as { type?: string; active?: boolean } | null;
+      if (message?.type !== "aim-state") return;
+      aimingNow = message.active === true;
       renderBanner();
     });
     // Sélectionner un token suffit à afficher sa roue.

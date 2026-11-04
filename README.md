@@ -26,7 +26,8 @@ the map. Your last choice is kept. Element and style open with a click, one at a
 The **–** button shrinks the window to the essentials: the current effect, favorites to switch to, and
 lasting effects. In the Programs tab, it becomes a list that turns programs on and off. If you pick another
 tool, a message says so and **Resume** gives control back to the tab. Closing the window restores your
-previous tool.
+previous tool. **Stop casting** does the same without closing the window, and **Cancel aiming** drops a first point
+already placed.
 
 A cube cast from a token can be **centered** or **on a face**, as with *Thunderwave*. On a face, a second
 click picks the direction, anywhere around the token: the cube sits against the token and faces it. When

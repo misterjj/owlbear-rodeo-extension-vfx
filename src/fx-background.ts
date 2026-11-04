@@ -114,6 +114,7 @@ import {
 } from "./fx-shaders";
 
 const WHEEL_SIZE = 380;
+const OWLBEAR_MOVE_TOOL = "rodeo.owlbear.tool/move";
 const FRAME_MS = 33;
 /** Un tir plus ancien est abandonné : l'onglet était en arrière-plan, ou la machine en retard. */
 const STALE_SHOT_MS = 1500;
@@ -524,7 +525,12 @@ async function hidePreview() {
   await OBR.scene.local.deleteItems([FX_PREVIEW_ID]).catch(warn);
 }
 
+/** Le panneau propose d'annuler tant qu'un premier point attend le second. */
+const postAimState = (active: boolean) =>
+  OBR.broadcast.sendMessage(FX_UI_CHANNEL, { type: "aim-state", active }, { destination: "LOCAL" }).catch(warn);
+
 async function clearSource() {
+  if (source) postAimState(false);
   source = undefined;
   sourceToken = undefined;
   await Promise.all([OBR.scene.local.deleteItems([FX_SOURCE_ID]).catch(warn), hidePreview()]);
@@ -533,6 +539,7 @@ async function clearSource() {
 async function markSource(point: Point, token?: TokenArea) {
   source = point;
   sourceToken = token;
+  postAimState(true);
   const dpi = await OBR.scene.grid.getDpi();
   const marker = buildShape()
     .id(FX_SOURCE_ID)
@@ -1486,6 +1493,18 @@ async function disarm() {
   if (mode) await OBR.tool.activateMode(tool, mode);
 }
 
+const cancelAim = () => clearSource().then(endAiming).then(stopPicking);
+
+/** Rend la main sans fermer le panneau. Sans outil à retrouver, on revient à celui de déplacement d'Owlbear. */
+async function stopCasting() {
+  await clearSource();
+  if (armedFrom) {
+    await disarm();
+    return;
+  }
+  if ((await OBR.tool.getActiveTool()) === FX_TOOL_ID) await OBR.tool.activateTool(OWLBEAR_MOVE_TOOL);
+}
+
 async function createTool() {
   const whenActive = { activeTools: [FX_TOOL_ID] };
   // L'outil ne se montre que pendant qu'il sert : on y entre par le menu Effets, en haut à gauche.
@@ -1519,7 +1538,7 @@ async function createTool() {
     },
     onKeyDown(_context, event) {
       if (event.key === "Escape") {
-        clearSource().then(endAiming).then(stopPicking).catch(warn);
+        cancelAim().catch(warn);
       }
     },
     onActivate() {
@@ -1625,6 +1644,8 @@ export async function setupFx() {
     if (type === "arm") arm().catch(warn);
     else if (type === "language") applyLanguage().catch(warn);
     else if (type === "disarm") disarm().catch(warn);
+    else if (type === "cancel-aim") cancelAim().catch(warn);
+    else if (type === "stop-cast") stopCasting().catch(warn);
   });
   // Le menu refermé, la carte reprend son outil et les repères d'un programme en cours disparaissent.
   OBR.action.onOpenChange((open) => {
