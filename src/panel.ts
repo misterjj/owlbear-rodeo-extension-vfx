@@ -16,7 +16,6 @@ import {
   elementLabel,
   styleLabel,
   addFavorite,
-  canBeDurable,
   defaultSpellName,
   durablesIn,
   editSpell,
@@ -107,6 +106,10 @@ function hint() {
     const where =
       choice.style === "mur"
         ? t("hint.wall")
+        : choice.style === "chaine"
+        ? t("hint.chain")
+        : STYLES[choice.style].directed
+        ? t("hint.directed")
         : t("hint.attach");
     return choice.gmOnly ? `${where} ${t("hint.hidden")}` : where;
   }
@@ -190,7 +193,7 @@ function optionsSummary() {
     startsOnFace(choice) ? t("options.onFace") : "",
   ].filter(Boolean);
   if (parts.length) return parts.join(" · ");
-  return [STYLES[choice.style].exactZone ? t("options.exact") : "", canBeDurable(choice.style) ? t("options.durable") : ""]
+  return [STYLES[choice.style].exactZone ? t("options.exact") : "", t("options.durable")]
     .filter(Boolean)
     .join(", ");
 }
@@ -236,7 +239,6 @@ function originRow() {
 }
 
 function durableRow() {
-  if (!canBeDurable(choice.style)) return "";
   return `<label class="option durable"><input id="durable" type="checkbox" ${choice.durable ? "checked" : ""} /> ${t("options.durableLong")}</label>`;
 }
 
@@ -383,7 +385,6 @@ function bindSpellEdit(index: number, container: HTMLElement) {
     const style = styleField.value as StyleId;
     field("exact-row").hidden = !STYLES[style].exactZone;
     field("exact-label").innerHTML = `${t("zone.exact", { what: exactZoneLabel(style) })} (<span data-unit>${escapeHtml(unit)}</span>)`;
-    field("durable-row").hidden = !canBeDurable(style);
     field("origin-row").hidden = style !== "cube";
   };
   showFieldsOfStyle();

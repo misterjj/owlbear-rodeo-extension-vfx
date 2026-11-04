@@ -9,6 +9,7 @@ import {
   isKeyOf,
   isPoint,
   scaledDuration,
+  type DurableEntry,
   type FxCast,
   type Point,
   type StyleId,
@@ -54,7 +55,13 @@ export interface Program extends FxCast, Timing {
   active: boolean;
   /** Heure d'activation : c'est d'elle que chaque joueur déduit les tirs. */
   startedAt: number;
+  /** L'effet reste sur son point jusqu'à ce qu'un nouveau tir l'y remplace. */
+  permanent: boolean;
+  /** Points tirés au hasard, ou parcourus dans l'ordre et en boucle. */
+  order: PointOrder;
 }
+
+export type PointOrder = "random" | "sequence";
 
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
 
@@ -114,11 +121,17 @@ export function programsIn(metadata: Record<string, unknown>): Program[] {
   return saved
     .filter(isProgram)
     .slice(0, MAX_LIMIT)
-    .map((program) => ({
-      ...program,
-      ...normalizeTiming(program),
-      anchors: program.anchors.slice(0, MAX_ANCHORS),
-    }));
+    .map((program) => {
+      // Les programmes enregistrés avant ces réglages restent éphémères et au hasard.
+      const permanent = program.permanent === true;
+      return {
+        ...program,
+        ...normalizeTiming(program),
+        anchors: program.anchors.slice(0, MAX_ANCHORS),
+        permanent,
+        order: program.order === "sequence" ? ("sequence" as const) : ("random" as const),
+      };
+    });
 }
 
 export const anchorsNeeded = (style: StyleId) => (STYLES[style].directed ? 2 : 1);
@@ -199,11 +212,17 @@ export function chainHops(points: (Point | undefined)[]) {
 
 /**
  * Points d'appui d'un tir. Avec deux points, un effet dirigé va toujours du premier au second.
- * Avec plus de points, il relie deux d'entre eux au hasard. Une chaîne passe par `chainHops`.
+ * Avec plus de points, il relie deux d'entre eux au hasard, ou chacun au suivant en séquence.
+ * Une chaîne passe par `chainHops`.
  */
 export function shotAnchors(program: Program, index: number): { at: Anchor; from?: Anchor } | undefined {
-  const { anchors, style } = program;
+  const { anchors, style, order } = program;
   if (anchors.length < anchorsNeeded(style)) return undefined;
+  if (order === "sequence" && (!STYLES[style].directed || anchors.length > 2)) {
+    const current = index % anchors.length;
+    if (!STYLES[style].directed) return { at: anchors[current] };
+    return { from: anchors[current], at: anchors[(current + 1) % anchors.length] };
+  }
   const pick = (slot: number, count: number) => Math.floor(shotRandom(program, index, slot) * count);
   if (!STYLES[style].directed) return { at: anchors[pick(1, anchors.length)] };
   if (anchors.length === 2) return { from: anchors[0], at: anchors[1] };
@@ -228,15 +247,86 @@ export function withProgram(programs: Program[], program: Program): Program[] {
     : [...programs, program];
 }
 
+/** Sauts d'une chaîne permanente : les points absents sont sautés, deux points confondus n'en font qu'un. */
+export function permanentChainHops(anchors: Anchor[], place: (anchor: Anchor) => Point | undefined) {
+  const kept = anchors.filter((anchor) => place(anchor) !== undefined);
+  const path = kept.filter((anchor, index) => {
+    if (index === 0) return true;
+    const [here, before] = [place(anchor)!, place(kept[index - 1])!];
+    return here.x !== before.x || here.y !== before.y;
+  });
+  return path.slice(1).map((at, index) => ({ from: path[index], at }));
+}
+
+/** Un même point placé deux fois est un seul point : il porte le numéro de sa première place. */
+const anchorRank = (anchors: Anchor[], anchor: Anchor) =>
+  anchors.findIndex((other) =>
+    anchor.token ? other.token?.id === anchor.token.id : !other.token && other.at.x === anchor.at.x && other.at.y === anchor.at.y,
+  );
+
+/** Le point qu'occupe un effet permanent : son départ et son arrivée s'il est dirigé, sinon le point visé. */
+export const shotSlot = (anchors: Anchor[], shot: { at: Anchor; from?: Anchor }) =>
+  shot.from ? `${anchorRank(anchors, shot.from)}>${anchorRank(anchors, shot.at)}` : String(anchorRank(anchors, shot.at));
+
+/** Description de l'effet d'un tir. Son nom vient du tir : deux MJ qui le calculent écrivent la même chose. */
+export const programEffect = (
+  program: Program,
+  index: number,
+  slot: string,
+  place: Pick<DurableEntry, "at" | "from" | "carrier" | "scale" | "owner" | "restAt">,
+): DurableEntry => ({
+  ...place,
+  id: `${program.id}:${slot}:${program.startedAt}:${index}`,
+  name: program.name,
+  element: program.element,
+  style: program.style,
+  // La téléportation n'a pas de trace, juste sa boucle : la même graine ne la coupe pas d'un tir à l'autre.
+  seed: shotRandom(program, program.style === "teleportation" ? 0 : index, 3) * 100,
+  gmOnly: false,
+  program: { id: program.id, slot },
+});
+
+/**
+ * Pose l'effet d'un tir à la place de celui qui occupe déjà ce point. Un point encore libre doit
+ * respecter la limite de la scène : sinon, la liste revient telle quelle et il n'y a rien à écrire.
+ */
+export function withProgramEffect(entries: DurableEntry[], effect: DurableEntry, limit: number) {
+  if (entries.some(({ id }) => id === effect.id)) return entries;
+  const occupied = ({ program }: DurableEntry) =>
+    program?.id === effect.program?.id && program?.slot === effect.program?.slot;
+  if (entries.some(occupied)) return entries.map((entry) => (occupied(entry) ? effect : entry));
+  return entries.length < limit ? [...entries, effect] : entries;
+}
+
+export const withoutProgramEffects = (entries: DurableEntry[], ids: string[]) =>
+  entries.filter(({ program }) => !program || !ids.includes(program.id));
+
 /** Noms des groupes existants, dans l'ordre alphabétique. */
 export const groupNames = (programs: Program[]) =>
   [...new Set(programs.map(({ group }) => group).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
 
-/** Points à repérer pour le MJ : ceux des programmes inactifs et du programme en cours d'édition. */
-export const markedAnchors = (programs: Program[], draft: Anchor[]) => [
-  ...programs.filter(({ active }) => !active).flatMap(({ anchors }) => anchors),
+/**
+ * Points à repérer pour le MJ : ceux des programmes inactifs et du programme en cours d'édition.
+ * Celui-ci ne compte que par son brouillon : sa version enregistrée garderait un point déjà retiré.
+ */
+export const markedAnchors = (programs: Program[], draft: Anchor[], editing?: string) => [
+  ...programs.filter(({ active, id }) => !active && id !== editing).flatMap(({ anchors }) => anchors),
   ...draft,
 ];
+
+/** Le point le plus proche sous le pointeur, ou -1. `positions` donne où chacun se trouve vraiment. */
+export function anchorNear(positions: Point[], pointer: Point, reach: number) {
+  let found = -1;
+  let closest = reach;
+  positions.forEach(({ x, y }, index) => {
+    const distance = Math.hypot(x - pointer.x, y - pointer.y);
+    if (distance <= closest) {
+      found = index;
+      closest = distance;
+    }
+  });
+  return found;
+}
 
 /** Échange un point avec son voisin. Au bord de la liste, rien ne change. */
 export function moveAnchor(anchors: Anchor[], index: number, delta: -1 | 1): Anchor[] {

@@ -15,8 +15,11 @@ import {
   limitsIn,
   parseLimit,
   roomSettingsWith,
-  canBeDurable,
   castsOnSelf,
+  appearAt,
+  dueDurables,
+  isSustained,
+  restDelay,
   durableChanges,
   durableItemId,
   durablesIn,
@@ -351,7 +354,58 @@ describe("géométrie", () => {
   });
 
   it("propose une version continue pour chaque style qui peut durer", () => {
-    expect(STYLE_IDS.filter(canBeDurable).sort()).toEqual(Object.keys(shaders.DURABLE_SKSL).sort());
+    expect([...STYLE_IDS].sort()).toEqual(Object.keys(shaders.DURABLE_SKSL).sort());
+  });
+});
+
+describe("effet qui succède à une animation", () => {
+  const from = { x: 0, y: 0 };
+  const at = { x: 700, y: 0 };
+
+  it("attend la fin du vol pour planter la flèche, plus longtemps si elle va plus loin", () => {
+    expect(restDelay("fleche", 1, from, at, 70)).toBeGreaterThan(0);
+    expect(restDelay("fleche", 1, from, at, 70)).toBeGreaterThan(restDelay("fleche", 1, from, { x: 70, y: 0 }, 70));
+  });
+
+  it("n'attend rien pour la téléportation, qui n'a pas d'animation de départ", () => {
+    expect(restDelay("teleportation", 1, from, at, 70)).toBe(0);
+  });
+
+  it("donne un instant de relève à tous les autres styles", () => {
+    for (const style of STYLE_IDS.filter((id) => id !== "teleportation")) {
+      expect(restDelay(style, 1, from, at, 70)).toBeGreaterThan(0);
+    }
+  });
+
+  it("ne garde que les effets arrivés à leur heure, et dit quand revenir", () => {
+    const entry = (id: string, restAt?: number) => ({ id, restAt }) as DurableEntry;
+    const { due, next } = dueDurables([entry("a"), entry("b", 100), entry("c", 200), entry("d", 300)], 100);
+    expect(due.map(({ id }) => id)).toEqual(["a", "b"]);
+    expect(next).toBe(200);
+    expect(dueDurables([entry("a")], 0).next).toBeUndefined();
+  });
+
+  it("fait apparaître un effet qui tient jusqu'au milieu de sa vie, puis l'y laisse", () => {
+    expect(appearAt(1000, 1000, 400)).toBe(0);
+    expect(appearAt(1000, 1200, 400)).toBe(0.25);
+    expect(appearAt(1000, 5000, 400)).toBe(0.5);
+    expect(appearAt(undefined, 1000, 400)).toBe(0.5);
+    // Un joueur en avance sur l'heure du tir attend sans rien montrer.
+    expect(appearAt(1000, 900, 400)).toBe(0);
+  });
+
+  it("donne une apparition sur le même objet aux seuls effets qui tiennent", () => {
+    for (const style of STYLE_IDS) {
+      const declared = shaders.DURABLE_SKSL[style].includes("uniform float appear;");
+      expect([style, declared]).toEqual([style, isSustained(style)]);
+    }
+  });
+
+  it("relit l'heure de relève, et écarte une valeur invalide", () => {
+    const key = "vfx-owlbear/durable";
+    const valid: DurableEntry = { id: "e", name: "n", element: "feu", style: "fleche", scale: 1, seed: 1, at, gmOnly: false, owner: "o", restAt: 5 };
+    expect(durablesIn({ [key]: [valid] })).toEqual([valid]);
+    expect(durablesIn({ [key]: [{ ...valid, restAt: "tard" }] })).toEqual([]);
   });
 });
 
@@ -449,7 +503,7 @@ describe("sorts d'un token", () => {
     expect(kept.durable).toBe(true);
     const changed = editSpell([zone], 0, { ...zone, style: "griffes" })[0];
     expect(changed.exact).toBeNull();
-    expect("durable" in changed).toBe(false);
+    expect(changed.durable).toBe(true);
     expect(editSpell([zone], 0, { ...zone, exact: Number.NaN })[0].exact).toBeNull();
     expect(editSpell([zone], 0, { ...zone, exact: 0 })[0].exact).toBeNull();
     expect("durable" in editSpell([zone], 0, { ...zone, durable: false })[0]).toBe(false);
@@ -524,11 +578,11 @@ describe("sorts d'un token", () => {
 describe("effets durables", () => {
   const key = "vfx-owlbear/durable";
 
-  it("ne rend durable que les styles prévus", () => {
-    expect(isDurable({ style: "nuage", durable: true })).toBe(true);
-    expect(isDurable({ style: "nuage", durable: false })).toBe(false);
-    expect(isDurable({ style: "nuage" })).toBe(false);
-    expect(isDurable({ style: "explosion", durable: true })).toBe(false);
+  it("rend durable tout style qui le demande", () => {
+    expect(isDurable({ durable: true })).toBe(true);
+    expect(isDurable({ durable: false })).toBe(false);
+    expect(isDurable({})).toBe(false);
+    expect(isDurable({ durable: true })).toBe(true);
   });
 
   const entry: DurableEntry = {
@@ -550,7 +604,7 @@ describe("effets durables", () => {
     expect(durablesIn({ [key]: "non" })).toEqual([]);
     for (const bad of [
       { ...entry, element: "constructor" },
-      { ...entry, style: "explosion" },
+      { ...entry, style: "constructor" },
       { ...entry, scale: 0 },
       { ...entry, at: { x: Number.NaN, y: 0 } },
       { ...entry, carrier: { id: 1 } },
@@ -602,6 +656,10 @@ describe("effets durables", () => {
     expect(firesFromToken({ style: "pluie", durable: true })).toBe(true);
     expect(firesFromToken({ style: "nuage" })).toBe(false);
     expect(firesFromToken({ style: "mur", durable: true })).toBe(false);
+    // Durables, les effets qu'on envoie sur quelqu'un se visent toujours.
+    expect(firesFromToken({ style: "explosion", durable: true })).toBe(false);
+    expect(firesFromToken({ style: "coup", durable: true })).toBe(false);
+    expect(firesFromToken({ style: "rayon", durable: true })).toBe(false);
     expect(firesFromToken({ style: "aura" })).toBe(true);
   });
 
@@ -748,8 +806,7 @@ describe("cube", () => {
     expect(effectScale("cube", "M", cells) * STYLES.cube.reach).toBe(cells);
   });
 
-  it("peut durer, sans partir tout seul du token", () => {
-    expect(canBeDurable("cube")).toBe(true);
+  it("ne part pas tout seul du token", () => {
     expect(castsOnSelf("cube")).toBe(false);
   });
 });

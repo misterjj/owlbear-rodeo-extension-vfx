@@ -20,8 +20,14 @@ import {
   withActive,
   withProgram,
   type Program,
+  anchorNear,
   anchorNumbers,
   moveAnchor,
+  permanentChainHops,
+  programEffect,
+  shotSlot,
+  withProgramEffect,
+  withoutProgramEffects,
 } from "../src/fx-programs";
 
 const point = (x: number) => ({ at: { x, y: 0 } });
@@ -40,6 +46,8 @@ const base: Program = {
   shots: null,
   active: true,
   startedAt: 1000,
+  permanent: false,
+  order: "random",
 };
 const key = "vfx-owlbear/programmes";
 
@@ -284,6 +292,19 @@ describe("gestion", () => {
     const draft = [point(9)];
     expect(markedAnchors([base, off], draft)).toEqual([...off.anchors, ...draft]);
   });
+
+  it("n'affiche que le brouillon du programme modifié, sans ses points déjà retirés", () => {
+    const off = { ...base, id: "p2", active: false };
+    const other = { ...base, id: "p3", active: false, anchors: [point(7)] };
+    expect(markedAnchors([off, other], [point(9)], "p2")).toEqual([point(7), point(9)]);
+  });
+
+  it("trouve le point le plus proche du pointeur, et aucun s'il est trop loin", () => {
+    const positions = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 130, y: 0 }];
+    expect(anchorNear(positions, { x: 120, y: 0 }, 40)).toBe(2);
+    expect(anchorNear(positions, { x: 5, y: 0 }, 40)).toBe(0);
+    expect(anchorNear(positions, { x: 500, y: 0 }, 40)).toBe(-1);
+  });
 });
 
 describe("ordre des points", () => {
@@ -307,5 +328,98 @@ describe("ordre des points", () => {
     const moved = { at: { x: 5, y: 5 }, token: { id: "t", name: "T" } };
     expect(anchorNumbers([token, a, moved]).map(({ text }) => text)).toEqual(["1, 3", "2"]);
     expect(anchorNumbers([]).length).toBe(0);
+  });
+});
+
+describe("ordre séquentiel", () => {
+  const points = [point(0), point(100), point(200)];
+  const sequence: Program = { ...base, order: "sequence", anchors: points };
+
+  it("parcourt les points d'une zone dans l'ordre et en boucle", () => {
+    const area = { ...sequence, style: "explosion" as const };
+    expect([0, 1, 2, 3, 4].map((i) => shotAnchors(area, i)!.at)).toEqual([points[0], points[1], points[2], points[0], points[1]]);
+  });
+
+  it("relie chaque point au suivant pour un effet dirigé, et le dernier au premier", () => {
+    expect([0, 1, 2].map((i) => shotAnchors(sequence, i))).toEqual([
+      { from: points[0], at: points[1] },
+      { from: points[1], at: points[2] },
+      { from: points[2], at: points[0] },
+    ]);
+  });
+
+  it("garde le sens du premier au second avec deux points", () => {
+    const two = { ...sequence, anchors: [points[0], points[1]] };
+    expect(shotAnchors(two, 1)).toEqual({ from: points[0], at: points[1] });
+  });
+});
+
+describe("effets permanents", () => {
+  const flame: Program = { ...base, style: "flamme", permanent: true, anchors: [point(0), point(100)] };
+  const place = { at: { x: 0, y: 0 }, scale: 1, owner: "mj" };
+  const effect = (index: number, slot = "0", program = flame) => programEffect(program, index, slot, place);
+
+  it("relit un ancien programme comme éphémère et au hasard", () => {
+    const { permanent, order, ...old } = base;
+    expect(programsIn({ [key]: [old] })[0]).toMatchObject({ permanent: false, order: "random" });
+  });
+
+  it("accepte le permanent pour tous les styles", () => {
+    expect(programsIn({ [key]: [{ ...base, permanent: true }] })[0].permanent).toBe(true);
+  });
+
+  it("laisse un effet par saut de chaîne, sans les points absents ni confondus", () => {
+    const anchors = [point(0), point(100), point(100), { at: { x: 200, y: 0 }, token: { id: "caché", name: "x" } }, point(300)];
+    const place = (anchor: (typeof anchors)[number]) => ("token" in anchor ? undefined : anchor.at);
+    expect(permanentChainHops(anchors, place)).toEqual([
+      { from: anchors[0], at: anchors[1] },
+      { from: anchors[1], at: anchors[4] },
+    ]);
+  });
+
+  it("garde un intervalle court, jusqu'au même minimum que les autres", () => {
+    const saved = programsIn({ [key]: [{ ...flame, min: 0.2, max: 0.5 }] })[0];
+    expect(saved).toMatchObject({ min: 0.2, max: 0.5, permanent: true });
+    expect(programsIn({ [key]: [{ ...flame, min: 0.05, max: 0.05 }] })[0].min).toBe(MIN_INTERVAL);
+  });
+
+  it("remplace l'effet du même point à chaque tir et garde les autres", () => {
+    const entries = [effect(0, "0"), effect(1, "1")];
+    const next = withProgramEffect(entries, effect(2, "0"), 10);
+    expect(next.map(({ id }) => id)).toEqual([effect(2, "0").id, effect(1, "1").id]);
+  });
+
+  it("garde la même graine à une téléportation, dont la boucle ne doit pas sauter", () => {
+    const portal = { ...flame, style: "teleportation" as const };
+    expect(effect(1, "0", portal).seed).toBe(effect(7, "0", portal).seed);
+    expect(effect(1).seed).not.toBe(effect(7).seed);
+  });
+
+  it("laisse se superposer deux programmes sur un même point", () => {
+    const other = { ...flame, id: "p2" };
+    expect(withProgramEffect([effect(0)], effect(0, "0", other), 10)).toHaveLength(2);
+  });
+
+  it("respecte la limite pour un nouveau point, mais pas pour un remplacement", () => {
+    const entries = [effect(0, "0")];
+    expect(withProgramEffect(entries, effect(1, "1"), 1)).toBe(entries);
+    expect(withProgramEffect(entries, effect(1, "0"), 1)).toEqual([effect(1, "0")]);
+  });
+
+  it("n'écrit rien si un autre MJ a déjà noté ce tir", () => {
+    const entries = [effect(3)];
+    expect(withProgramEffect(entries, effect(3), 10)).toBe(entries);
+  });
+
+  it("retire seulement les effets des programmes visés", () => {
+    const hand = { ...effect(0), id: "main", program: undefined };
+    const other = effect(0, "0", { ...flame, id: "p2" });
+    expect(withoutProgramEffects([hand, effect(0), other], ["p1"])).toEqual([hand, other]);
+  });
+
+  it("compte un point placé deux fois comme un seul, et un mur par ses deux extrémités", () => {
+    const anchors = [point(0), point(100), point(0)];
+    expect(shotSlot(anchors, { at: anchors[2] })).toBe("0");
+    expect(shotSlot(anchors, { from: anchors[1], at: anchors[2] })).toBe("1>0");
   });
 });

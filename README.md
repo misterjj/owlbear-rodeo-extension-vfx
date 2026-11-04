@@ -37,11 +37,17 @@ Reusing an existing name replaces it.
 
 ## Lasting effects
 
-Aura, transformation, flame, rain, dome, cube, cloud and wall can last: check **Lasting** in **More options**. The
-effect then stays until removed, and is also visible to people who join during the game.
+Every style can last: check **Lasting** in **More options**. The effect then stays until removed, and is also
+visible to people who join during the game. Each style lasts in its own way:
+
+- aura, transformation, flame, rain, dome, cube, cloud, wall, beam, chain, cone and healing keep running;
+- arrow, strike, claws, bite, projectile, explosion and meteor play their animation once, then leave a trace: a
+  planted arrow, claw or fang marks, or scorched ground with embers and small flames;
+- teleport replays in a loop, with a short pause, and never moves a token.
 
 - Clicking a token attaches it: it follows the token and disappears with it. Clicking again turns it off.
-- Clicking the map places it there. A wall is drawn with two clicks and always stays on the map.
+- Clicking the map places it there. Effects with two points (wall, beam, cone…) take two clicks and always stay
+  on the map. A lasting chain leaves one effect per jump, until `Escape`.
 - The **Lasting effects** list removes them one by one or all at once (10 per scene at most by default).
 
 A lasting spell on the wheel turns on and off with a click on its sector. A darkness cloud is almost opaque,
@@ -56,11 +62,17 @@ Each row starts or stops with ▶ and ■, and a whole group with **▶ All** an
 
 - **Effect:** element, style, size or exact area.
 - **Timing:** minimum and maximum interval, first shot offset, number of shots (empty: endless).
-- **Points:** map positions or tokens, placed with a click. ▲ and ▼ change their order, and their number shows
-  on the map while editing. A directed effect goes from the first point to the second. With more than two
-  points, or for an area effect, the point is picked at random. A **chain**, however, goes through all its
-  points in order: this counts as one shot, and the interval counts from its end. A hidden or deleted token
-  is skipped.
+- **Points:** map positions or tokens, placed with a click. Drag a point on the map to move it, while placing
+  points. ▲ and ▼ change their order, and their number shows on the map while editing. A directed effect goes from the first point to the second. With more than two
+  points, or for an area effect, the **point order** is random or in sequence: in sequence, each shot moves to
+  the next point (a directed effect links each point to the next), then loops. A **chain**, however, always
+  goes through all its points in order: this counts as one shot, and the interval counts from its end. A hidden
+  or deleted token is skipped.
+- **Permanent effect:** each point keeps its effect until the next shot of this program on that point removes it
+  and starts it again, so the interval sets the rhythm. Effects that keep running appear on their own, as one
+  continuous effect. ■ removes them; when a shot count runs out they stay, and the row offers ■
+  to remove them. They count toward the lasting effects limit (a shot on a new point is skipped once it is
+  reached), each style lasts as described above, and a GM must be connected for new shots to land.
 - **Groups:** they turn on or off all at once. Programs activated together share the same start, so an offset
   makes them alternate.
 

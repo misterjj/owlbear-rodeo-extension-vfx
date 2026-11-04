@@ -791,12 +791,7 @@ export const STYLE_GROUPS: { label: TextKey; styles: StyleId[] }[] = [
   { label: "group.self", styles: ["aura", "transformation", "soin", "teleportation"] },
 ];
 
-const DURABLE_STYLES: readonly StyleId[] = ["aura", "pluie", "dome", "cube", "mur", "nuage", "transformation", "flamme"];
-
-export const canBeDurable = (style: StyleId) => DURABLE_STYLES.includes(style);
-
-export const isDurable = ({ style, durable }: { style: StyleId; durable?: boolean }) =>
-  durable === true && canBeDurable(style);
+export const isDurable = ({ durable }: { durable?: boolean }) => durable === true;
 
 /**
  * Chaque effet durable est recalculé en permanence par tous les joueurs : leur nombre est limité, et
@@ -855,6 +850,12 @@ export interface DurableEntry {
   angle?: number;
   gmOnly: boolean;
   owner: string;
+  /** Posé par un programme : le point occupé est `slot`, et un nouveau tir sur ce point le remplace. */
+  program?: { id: string; slot: string };
+  /** Heure à laquelle l'animation de départ a assez avancé pour laisser place à sa trace. */
+  restAt?: number;
+  /** Heure de son apparition, pour un effet qui tient. Sans elle, il est là d'emblée. */
+  enterAt?: number;
 }
 
 const isDurableEntry = (value: unknown): value is DurableEntry => {
@@ -864,7 +865,6 @@ const isDurableEntry = (value: unknown): value is DurableEntry => {
     typeof entry.name === "string" &&
     isKeyOf(ELEMENTS, entry.element) &&
     isKeyOf(STYLES, entry.style) &&
-    canBeDurable(entry.style) &&
     isExact(entry.scale) &&
     typeof entry.seed === "number" &&
     Number.isFinite(entry.seed) &&
@@ -874,6 +874,10 @@ const isDurableEntry = (value: unknown): value is DurableEntry => {
     (entry.angle === undefined || Number.isFinite(entry.angle)) &&
     (entry.carrier === undefined ||
       (typeof entry.carrier.id === "string" && typeof entry.carrier.name === "string")) &&
+    (entry.restAt === undefined || Number.isFinite(entry.restAt)) &&
+    (entry.enterAt === undefined || Number.isFinite(entry.enterAt)) &&
+    (entry.program === undefined ||
+      (typeof entry.program.id === "string" && typeof entry.program.slot === "string")) &&
     typeof entry.gmOnly === "boolean" &&
     typeof entry.owner === "string"
   );
@@ -884,9 +888,62 @@ export function durablesIn(metadata: Record<string, unknown>): DurableEntry[] {
   return Array.isArray(saved) ? saved.filter(isDurableEntry).slice(0, MAX_LIMIT) : [];
 }
 
-/** Même effet déjà attaché à ce token : un nouveau clic sert à l'éteindre. */
+/**
+ * Même effet déjà attaché à ce token : un nouveau clic sert à l'éteindre.
+ * L'effet d'un programme ne compte pas : les lancers à la main n'y touchent pas.
+ */
 export const sameDurable = (entry: DurableEntry, { element, style }: FxCast) =>
-  entry.element === element && entry.style === style;
+  !entry.program && entry.element === element && entry.style === style;
+
+/** Styles dont il ne reste qu'une trace : lancés durables, ils jouent d'abord leur animation complète. */
+export const LEAVES_TRACE: readonly StyleId[] = ["fleche", "projectile", "coup", "griffes", "morsure", "explosion", "meteore"];
+
+/** Un effet qui tient, par opposition à une trace ou à la boucle de la téléportation. */
+export const isSustained = (style: StyleId) => style !== "teleportation" && !LEAVES_TRACE.includes(style);
+
+/** Où en est l'apparition d'un effet qui tient : de 0 au milieu de sa vie, 0,5, où il reste. */
+export function appearAt(enterAt: number | undefined, now: number, delay: number) {
+  if (enterAt === undefined || delay <= 0) return 0.5;
+  return Math.min(Math.max(((now - enterAt) / delay) * 0.5, 0), 0.5);
+}
+
+/** Durée de chaque animation à la taille M, pour les styles sans trajet ; l'instant où l'effet durable lui succède. */
+const REST_MOMENT: Partial<Record<StyleId, { ms: number; at: number }>> = {
+  coup: { ms: 650, at: 0.45 },
+  griffes: { ms: 650, at: 0.45 },
+  morsure: { ms: 800, at: 0.78 },
+  explosion: { ms: 1500, at: 0.5 },
+  meteore: { ms: 2600, at: 0.6 },
+  pluie: { ms: 3000, at: 0.5 },
+  rayon: { ms: 1000, at: 0.5 },
+  chaine: { ms: CHAIN_HOP_MS, at: 0.5 },
+  cone: { ms: 1200, at: 0.5 },
+  mur: { ms: 3500, at: 0.5 },
+  dome: { ms: 3000, at: 0.5 },
+  cube: { ms: 3000, at: 0.5 },
+  aura: { ms: 2200, at: 0.5 },
+  flamme: { ms: 3000, at: 0.5 },
+  transformation: { ms: 2600, at: 0.5 },
+  nuage: { ms: 4000, at: 0.5 },
+  soin: { ms: 1800, at: 0.5 },
+};
+
+/** Temps entre le lancer et l'apparition de l'effet qui reste, en millisecondes. */
+export function restDelay(style: StyleId, scale: number, from: Point, at: Point, dpi: number) {
+  if (style === "fleche") return arrowDuration(from, at, dpi);
+  if (style === "projectile") return projectileDuration(from, at, dpi) + scaledDuration(1000, scale) * 0.5;
+  const moment = REST_MOMENT[style];
+  return moment ? scaledDuration(moment.ms, scale) * moment.at : 0;
+}
+
+/** Les effets à créer dès maintenant, et l'heure à laquelle revenir pour les autres. */
+export function dueDurables(entries: DurableEntry[], now: number) {
+  const later = entries.flatMap(({ restAt }) => (restAt !== undefined && restAt > now ? [restAt] : []));
+  return {
+    due: entries.filter(({ restAt }) => restAt === undefined || restAt <= now),
+    next: later.length ? Math.min(...later) : undefined,
+  };
+}
 
 export const durableItemId = (entryId: string) => `${FX_DURABLE_ITEM_PREFIX}${entryId}`;
 
@@ -908,6 +965,9 @@ export function durableChanges(
   };
 }
 
+/** Durables, ces zones restent sur le lanceur. Une explosion ou un coup durable se vise, comme d'habitude. */
+const DURABLE_ON_CASTER: readonly StyleId[] = ["pluie", "cube", "nuage", "flamme"];
+
 /** La durée d'un sort lancé depuis la roue : on ne vise que s'il y a un point à choisir. */
 export const firesFromToken = (spell: { style: StyleId; durable?: boolean; onFace?: boolean }) =>
-  !startsOnFace(spell) && (castsOnSelf(spell.style) || (isDurable(spell) && !STYLES[spell.style].directed));
+  !startsOnFace(spell) && (castsOnSelf(spell.style) || (isDurable(spell) && DURABLE_ON_CASTER.includes(spell.style)));

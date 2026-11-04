@@ -29,7 +29,12 @@ import {
   coneTarget,
   defaultSpellName,
   cubeOnFace,
+  appearAt,
+  isSustained,
   durableChanges,
+  dueDurables,
+  LEAVES_TRACE,
+  restDelay,
   durableItemId,
   durablesIn,
   effectScale,
@@ -60,11 +65,16 @@ import {
   type TokenArea,
 } from "./fx";
 import {
+  anchorNear,
   anchorNumbers,
   FX_PROGRAMS_KEY,
   FX_PROGRAM_CHANNEL,
   markedAnchors,
   nextShot,
+  permanentChainHops,
+  programEffect,
+  shotSlot,
+  withProgramEffect,
   chainHopDelay,
   chainHops,
   programsIn,
@@ -534,6 +544,9 @@ function durableSpec(entry: DurableEntry, at: Point, dpi: number) {
   const look = ELEMENTS[element];
   const common = commonUniforms(element, seed, dpi * scale);
   const radius = { name: "radius", value: dpi * STYLES[style].reach * scale };
+  const start = from ?? at;
+  const smoke = { name: "smoke", value: { x: look.smoke[0], y: look.smoke[1], z: look.smoke[2] } };
+  const cycle = (ms: number) => ({ name: "cycle", value: ms / 1000 });
   switch (style) {
     case "aura":
     case "dome":
@@ -579,8 +592,76 @@ function durableSpec(entry: DurableEntry, at: Point, dpi: number) {
           { name: "rough", value: look.rough },
         ],
       };
-    default:
-      return undefined;
+    case "soin":
+      return { sksl: DURABLE_SKSL.soin, position: at, uniforms: [...common, radius] };
+    case "rayon":
+    case "chaine":
+      return {
+        sksl: DURABLE_SKSL[style],
+        position: start,
+        uniforms: [
+          ...common,
+          { name: "target", value: vector(start, at) },
+          { name: "width", value: dpi * (style === "rayon" ? 0.16 : 0.1) * scale },
+          // En zigzag, ce qui se lit comme un arc, sauf pour une énergie pure ou une onde.
+          { name: "jag", value: style === "rayon" ? look.jag : look.radiant || look.sonic ? 0 : Math.max(look.jag, 0.8) },
+          { name: "radiant", value: look.radiant },
+        ],
+      };
+    case "cone":
+      return {
+        sksl: DURABLE_SKSL.cone,
+        position: start,
+        uniforms: [
+          ...common,
+          { name: "target", value: coneTarget(start, at, dpi * STYLES.cone.reach * scale) },
+          smoke,
+          { name: "rough", value: look.rough },
+          { name: "radiant", value: look.radiant },
+        ],
+      };
+    case "fleche":
+      return {
+        sksl: DURABLE_SKSL.fleche,
+        position: start,
+        uniforms: [
+          // Une flèche reste droite, même dans un élément qui ondule.
+          ...common.filter(({ name }) => name !== "warp"),
+          { name: "warp", value: 0 },
+          { name: "target", value: vector(start, at) },
+          { name: "width", value: dpi * 0.045 * scale },
+        ],
+      };
+    case "projectile":
+      // Le sol brûlé sous l'impact : ses dimensions suivent celles de l'explosion qu'il laisse.
+      return { sksl: DURABLE_SKSL.projectile, position: at, uniforms: [...common, smoke, { name: "radius", value: dpi * scale * 0.75 }] };
+    case "explosion":
+    case "meteore":
+      return {
+        sksl: DURABLE_SKSL[style],
+        position: at,
+        uniforms: [...common, smoke, { ...radius, value: radius.value * (style === "explosion" ? 0.75 : 0.62) }],
+      };
+    case "coup":
+    case "griffes":
+      return {
+        sksl: DURABLE_SKSL[style],
+        position: at,
+        uniforms: [...common, radius, { name: "claws", value: style === "griffes" ? 1 : 0 }],
+      };
+    case "morsure":
+      return { sksl: DURABLE_SKSL.morsure, position: at, uniforms: [...common, radius] };
+    case "teleportation":
+      return {
+        sksl: DURABLE_SKSL.teleportation,
+        position: start,
+        uniforms: [
+          ...common,
+          cycle(scaledDuration(1500, scale)),
+          { name: "radius", value: dpi * scale },
+          { name: "target", value: vector(start, at) },
+        ],
+      };
   }
 }
 
@@ -592,13 +673,14 @@ async function addDurableItem(entry: DurableEntry, carriers: Map<string, Item>, 
     ? { x: center.x + entry.offset.x, y: center.y + entry.offset.y }
     : center;
   const spec = durableSpec(entry, at, dpi);
-  if (!spec) return;
+  const sustained = isSustained(entry.style);
+  const delay = restDelay(entry.style, entry.scale, entry.from ?? at, at, dpi);
   const builder = buildEffect()
     .id(durableItemId(entry.id))
     .effectType("VIEWPORT")
     .sksl(spec.sksl)
     .position(spec.position)
-    .uniforms(spec.uniforms)
+    .uniforms(sustained ? [...spec.uniforms, { name: "appear", value: appearAt(entry.enterAt, Date.now(), delay) }] : spec.uniforms)
     .blendMode("SRC_OVER")
     // Sous le brouillard de guerre, comme la météo d'Owlbear.
     .layer("RULER")
@@ -612,6 +694,31 @@ async function addDurableItem(entry: DurableEntry, carriers: Map<string, Item>, 
       .disableAttachmentBehavior(["SCALE", "ROTATION", "LOCKED"]);
   }
   await OBR.scene.local.addItems([builder.build()]);
+  if (sustained) growIn(durableItemId(entry.id), entry.enterAt, delay);
+}
+
+/** Fait apparaître un effet qui tient, sur l'objet lui-même. Il s'arrête au milieu de sa vie et y reste. */
+function growIn(itemId: string, enterAt: number | undefined, delay: number) {
+  if (appearAt(enterAt, Date.now(), delay) >= 0.5) return;
+  let sending = false;
+  const timer = setInterval(() => {
+    if (sending) return;
+    const appear = appearAt(enterAt, Date.now(), delay);
+    if (appear >= 0.5) clearInterval(timer);
+    sending = true;
+    OBR.scene.local
+      .updateItems([itemId], (drafts) => {
+        for (const draft of drafts) {
+          if (isEffect(draft)) {
+            draft.uniforms = draft.uniforms.map((uniform) => (uniform.name === "appear" ? { ...uniform, value: appear } : uniform));
+          }
+        }
+      })
+      .catch(warn)
+      .finally(() => {
+        sending = false;
+      });
+  }, FRAME_MS);
 }
 
 /** Aligne les effets locaux de ce joueur sur la description partagée. */
@@ -629,14 +736,18 @@ async function reconcileDurables() {
   const local = await OBR.scene.local.getItems((item) =>
     item.id.startsWith(FX_DURABLE_ITEM_PREFIX),
   );
-  const { add, remove } = durableChanges(
+  const { add: wanted, remove } = durableChanges(
     entries,
     local.map(({ id }) => id),
     role,
     (id) => carriers.has(id),
   );
-  if (remove.length) await OBR.scene.local.deleteItems(remove);
+  // Un effet qui suit une animation n'apparaît qu'à son heure.
+  const { due: add, next } = dueDurables(wanted, Date.now());
+  if (next !== undefined) setTimeout(() => void scheduleReconcile(), Math.max(next - Date.now(), 0) + 10);
+  // Dans cet ordre : un effet remplacé ne laisse pas de trou à l'écran.
   await Promise.all(add.map((entry) => addDurableItem(entry, carriers, dpi)));
+  if (remove.length) await OBR.scene.local.deleteItems(remove);
   // L'effet d'un token révélé ou caché suit le changement.
   const stale = local.filter(
     ({ attachedTo, visible }) =>
@@ -662,10 +773,12 @@ let programs: Program[] = [];
 let programTimer: ReturnType<typeof setInterval> | undefined;
 const programClocks = new Map<
   string,
-  { startedAt: number; shot: Shot | undefined; busyUntil: number }
+  { startedAt: number; shot: Shot | undefined; busyUntil: number; placing?: Promise<void> }
 >();
 /** Points du programme en cours d'édition dans la fenêtre du MJ. */
 let draftAnchors: Anchor[] = [];
+/** Le programme que ce brouillon modifie : ses points enregistrés ne sont plus à jour. */
+let draftProgram: string | undefined;
 let markerSignature = "";
 
 /** Démarre l'horloge seulement s'il y a un programme actif, et oublie ceux qui ont disparu. */
@@ -693,12 +806,14 @@ function runPrograms() {
     while (clock.shot && clock.shot.time <= now) {
       if (now - clock.shot.time < STALE_SHOT_MS) {
         clock.busyUntil = clock.shot.time + shotDuration(program);
-        fireProgram(program, clock.shot.index).catch(warn);
+        const fired = fireProgram(program, clock.shot.index, clock.shot.time).catch(warn);
+        if (program.permanent) clock.placing = fired;
       }
       clock.shot = nextShot(program, clock.shot);
     }
     // La dernière chaîne va jusqu'au bout avant que la série ne soit déclarée finie.
-    if (!clock.shot && now >= clock.busyUntil) finishProgram(program);
+    // Le dernier effet permanent doit être posé avant que la série soit déclarée finie.
+    if (!clock.shot && now >= clock.busyUntil) (clock.placing ?? Promise.resolve()).then(() => finishProgram(program));
   }
 }
 
@@ -746,8 +861,70 @@ async function fireChain(program: Program, index: number) {
   }
 }
 
+/** Les tirs permanents écrivent l'un après l'autre : deux à la fois effaceraient le travail de l'autre. */
+let placingEffects = Promise.resolve();
+
+/**
+ * Le MJ note l'effet dans la scène, et chaque joueur le crée comme tout effet durable. S'il laisse
+ * une trace, chaque joueur joue aussi l'animation de son côté, comme pour un tir normal.
+ */
+async function firePermanent(program: Program, index: number, time: number) {
+  const areas = await loadTokenAreas();
+  const tokenOf = ({ token }: Anchor) => (token ? areas.find(({ id }) => id === token.id) : undefined);
+  const place = (anchor: Anchor) => (anchor.token ? tokenOf(anchor)?.center : anchor.at);
+  // Une chaîne laisse un effet par saut. Un token caché ou supprimé est sauté, et rien n'est trahi.
+  const single = program.style === "chaine" ? undefined : shotAnchors(program, index);
+  const shots: { at: Anchor; from?: Anchor }[] =
+    program.style === "chaine" ? permanentChainHops(program.anchors, place) : single ? [single] : [];
+  const [multiplier, dpi] = await Promise.all([cellValue(), OBR.scene.grid.getDpi()]);
+  const choice = { ...program, gmOnly: false, durable: false };
+  const scale = effectScale(program.style, program.size, exactCells(choice, multiplier));
+  const effects = shots.flatMap((shot, hop) => {
+    const at = place(shot.at);
+    const from = shot.from && place(shot.from);
+    if (!at || (shot.from && !from)) return [];
+    const carrier = shot.from ? undefined : tokenOf(shot.at);
+    const start = program.style === "chaine" ? hop * chainHopDelay(program) : 0;
+    return [
+      programEffect(program, index, shotSlot(program.anchors, shot), {
+        at,
+        ...(from ? { from } : {}),
+        ...(carrier ? { carrier: { id: carrier.id, name: carrier.name } } : {}),
+        scale,
+        owner: OBR.player.id,
+        ...(LEAVES_TRACE.includes(program.style)
+          ? { restAt: time + restDelay(program.style, scale, from ?? at, at, dpi) }
+          : { enterAt: time + start }),
+      }),
+    ];
+  });
+  if (!effects.length) return;
+  // Seule une trace a besoin d'une animation à part : un effet qui tient apparaît de lui-même.
+  if (LEAVES_TRACE.includes(program.style)) {
+    const { at, from, seed } = effects[0];
+    play(buildMessage(choice, at, from, multiplier, seed), MAX_ACTIVE_FROM_PROGRAMS).catch(warn);
+  }
+  if (role !== "GM") return;
+  placingEffects = placingEffects
+    .then(async () => {
+      const [metadata, room] = await Promise.all([OBR.scene.getMetadata(), OBR.room.getMetadata()]);
+      // Arrêté pendant ce temps : on ne repose pas ce que le bouton vient de retirer.
+      if (!programsIn(metadata).some((p) => p.id === program.id && p.active && p.startedAt === program.startedAt)) return;
+      const entries = durablesIn(metadata);
+      const limit = limitsIn(room).durable;
+      const next = effects.reduce((list, effect) => withProgramEffect(list, effect, limit), entries);
+      if (next !== entries) await saveDurables(next);
+    })
+    .catch(warn);
+  await placingEffects;
+}
+
 /** Chaque joueur calcule le même tir de son côté : aucun message n'est échangé. */
-async function fireProgram(program: Program, index: number) {
+async function fireProgram(program: Program, index: number, time: number) {
+  if (program.permanent) {
+    await firePermanent(program, index, time);
+    return;
+  }
   if (program.style === "chaine") {
     await fireChain(program, index);
     return;
@@ -771,7 +948,7 @@ async function syncMarkers(itemIds: string[], dpi: number) {
   const present = new Set(itemIds);
   const anchors =
     role === "GM"
-      ? markedAnchors(programs, draftAnchors).filter(({ token }) => !token || present.has(token.id))
+      ? markedAnchors(programs, draftAnchors, draftProgram).filter(({ token }) => !token || present.has(token.id))
       : [];
   const numbers = role === "GM"
     ? anchorNumbers(draftAnchors).filter(({ anchor: { token } }) => !token || present.has(token.id))
@@ -858,11 +1035,12 @@ async function stopPicking() {
 }
 
 function handleProgramMessage(data: unknown) {
-  const message = data as { type?: string; anchors?: Anchor[] } | null;
+  const message = data as { type?: string; anchors?: Anchor[]; program?: string } | null;
   if (message?.type === "pick-start") startPicking().catch(warn);
   else if (message?.type === "pick-stop") stopPicking().catch(warn);
   else if (message?.type === "draft") {
     draftAnchors = Array.isArray(message.anchors) ? message.anchors : [];
+    draftProgram = message.program;
     scheduleReconcile();
   }
 }
@@ -913,13 +1091,17 @@ async function placeDurable(
     await OBR.notification.show(t("running.limit", { limit: durableLimit }));
     return;
   }
+  const leavesTrace = LEAVES_TRACE.includes(choice.style);
+  const scale = effectScale(choice.style, choice.size, exactCells(choice, multiplier));
+  const dpi = await OBR.scene.grid.getDpi();
   const entry: DurableEntry = {
     id: crypto.randomUUID(),
     name: label,
     element: choice.element,
     style: choice.style,
-    scale: effectScale(choice.style, choice.size, exactCells(choice, multiplier)),
+    scale,
     seed: randomSeed(),
+    ...(leavesTrace ? { restAt: Date.now() + restDelay(choice.style, scale, from ?? at, at, dpi) } : {}),
     at,
     ...(from ? { from } : {}),
     ...(carrier ? { carrier: { id: carrier.id, name: carrier.name } } : {}),
@@ -933,6 +1115,8 @@ async function placeDurable(
   if (choice.style === "transformation") {
     send(buildMessage(choice, carrier?.center ?? at, undefined, multiplier, entry.seed));
   }
+  // La flèche doit voler, les griffes griffer : seule leur trace est durable.
+  if (leavesTrace) send(buildMessage(choice, carrier?.center ?? at, from, multiplier, entry.seed));
 }
 
 /** Sort lancé depuis la roue, le temps de viser, et l'outil à retrouver ensuite. */
@@ -1140,6 +1324,60 @@ async function teleport(
   }, teleportTiming(choice.size).arrivalDelay);
 }
 
+const FX_DRAG_ID = `${FX_MARKER_PREFIX}deplace`;
+/** Le point d'un programme qu'on est en train de déplacer sur la carte. */
+let draggedAnchor: number | undefined;
+
+async function startAnchorDrag({ pointerPosition }: ToolEvent) {
+  if (!picking) return;
+  const [areas, dpi] = await Promise.all([loadTokenAreas(), OBR.scene.grid.getDpi()]);
+  const positions = draftAnchors.map(({ at, token }) => (token ? areas.find(({ id }) => id === token.id)?.center : undefined) ?? at);
+  const index = anchorNear(positions, pointerPosition, dpi * 0.4);
+  if (index < 0) return;
+  draggedAnchor = index;
+  const ghost = buildShape()
+    .id(FX_DRAG_ID)
+    .shapeType("CIRCLE")
+    .width(dpi * 0.45)
+    .height(dpi * 0.45)
+    .position(pointerPosition)
+    .fillColor("#bb99ff")
+    .fillOpacity(0.45)
+    .strokeColor("#ffffff")
+    .strokeWidth(dpi * 0.03)
+    .layer("POINTER")
+    .locked(true)
+    .disableHit(true)
+    .build();
+  await OBR.scene.local.addItems([ghost]);
+}
+
+function moveAnchorDrag({ pointerPosition }: ToolEvent) {
+  if (draggedAnchor === undefined) return;
+  OBR.scene.local
+    .updateItems([FX_DRAG_ID], (drafts) => {
+      for (const draft of drafts) draft.position = pointerPosition;
+    })
+    .catch(warn);
+}
+
+async function cancelAnchorDrag() {
+  draggedAnchor = undefined;
+  await OBR.scene.local.deleteItems([FX_DRAG_ID]).catch(warn);
+}
+
+/** Lâché sur un token, le point s'y accroche, comme avec un clic. */
+async function endAnchorDrag(event: ToolEvent) {
+  const index = draggedAnchor;
+  await cancelAnchorDrag();
+  if (index === undefined) return;
+  const picked = await tokenUnderPointer(event);
+  const anchor: Anchor = picked
+    ? { at: picked.center, token: { id: picked.id, name: picked.name } }
+    : { at: event.pointerPosition };
+  await postToWindow({ type: "moved", index, anchor });
+}
+
 async function handleClick(event: ToolEvent) {
   if (picking) {
     const picked = await tokenUnderPointer(event);
@@ -1180,9 +1418,14 @@ async function handleClick(event: ToolEvent) {
     await endAiming();
   } else if (isDurable(choice)) {
     const from = source;
-    await clearSource();
     await placeDurable(choice, label, point, undefined, from);
-    await endAiming();
+    // Une chaîne repart de la cible qu'elle vient de toucher, jusqu'à Échap.
+    if (choice.style === "chaine") {
+      await markSource(point);
+    } else {
+      await clearSource();
+      await endAiming();
+    }
   } else if (choice.style === "teleportation") {
     const [from, startToken] = [source, sourceToken];
     await clearSource();
@@ -1251,6 +1494,18 @@ async function createTool() {
     onToolMove(_context, event) {
       updatePreview(event).catch(warn);
     },
+    onToolDragStart(_context, event) {
+      startAnchorDrag(event).catch(warn);
+    },
+    onToolDragMove(_context, event) {
+      moveAnchorDrag(event);
+    },
+    onToolDragEnd(_context, event) {
+      endAnchorDrag(event).catch(warn);
+    },
+    onToolDragCancel() {
+      cancelAnchorDrag().catch(warn);
+    },
     onKeyDown(_context, event) {
       if (event.key === "Escape") {
         clearSource().then(endAiming).then(stopPicking).catch(warn);
@@ -1262,6 +1517,7 @@ async function createTool() {
     onDeactivate() {
       toolActive = false;
       aiming = undefined;
+      if (draggedAnchor !== undefined) cancelAnchorDrag().catch(warn);
       if (picking) {
         picking = undefined;
         postToWindow({ type: "pick-stopped" });
@@ -1363,6 +1619,7 @@ export async function setupFx() {
   OBR.action.onOpenChange((open) => {
     if (open) return;
     draftAnchors = [];
+    draftProgram = undefined;
     scheduleReconcile();
     stopPicking().then(disarm).catch(warn);
   });

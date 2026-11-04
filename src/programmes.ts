@@ -1,5 +1,5 @@
 import OBR, { type Metadata } from "@owlbear-rodeo/sdk";
-import { DEFAULT_LIMIT, STYLES, elementLabel, exactZoneLabel, styleLabel, isExact, limitsIn, type ElementId, type SizeId, type StyleId } from "./fx";
+import { DEFAULT_LIMIT, FX_DURABLE_KEY, STYLES, durablesIn, elementLabel, exactZoneLabel, styleLabel, isExact, limitsIn, type DurableEntry, type ElementId, type SizeId, type StyleId } from "./fx";
 import { elementColor, elementGrid, elementValue, pickerRow, sizeRow, styleGrid, type PickerId } from "./effect-fields";
 import { STYLE_ICONS } from "./fx-icons";
 import { t } from "./i18n";
@@ -8,6 +8,7 @@ import {
   FX_PROGRAM_CHANNEL,
   MAX_ANCHORS,
   MIN_INTERVAL,
+  type PointOrder,
   anchorsNeeded,
   groupNames,
   moveAnchor,
@@ -16,6 +17,7 @@ import {
   programsIn,
   withActive,
   withProgram,
+  withoutProgramEffects,
   type Program,
 } from "./fx-programs";
 import { watchSceneUnit } from "./scene-unit";
@@ -24,6 +26,8 @@ let app: HTMLElement;
 const warn = (error: unknown) => console.warn("Effets :", error);
 
 let programs: Program[] = [];
+/** Effets durables de la scène : une série finie laisse les siens en place. */
+let effects: DurableEntry[] = [];
 /** Programme en cours d'édition ; sans lui, la fenêtre montre la liste. */
 let draft: Program | undefined;
 let picking = false;
@@ -42,17 +46,31 @@ const escapeHtml = (text: string) =>
 const post = (data: unknown) =>
   OBR.broadcast.sendMessage(FX_PROGRAM_CHANNEL, data, { destination: "LOCAL" }).catch(warn);
 
-/** Repart de la liste à jour : un autre MJ a pu y toucher depuis son affichage. */
-async function saveWith(change: (current: Program[]) => Program[]) {
-  const current = programsIn(await OBR.scene.getMetadata());
-  await OBR.scene.setMetadata({ [FX_PROGRAMS_KEY]: change(current) });
+/** Les points en cours d'édition s'affichent sur la carte à la place de ceux du programme enregistré. */
+const postDraft = () => post({ type: "draft", anchors: draft?.anchors ?? [], program: draft?.id });
+
+/**
+ * Repart des listes à jour : un autre MJ a pu y toucher depuis son affichage.
+ * `cleared` : les programmes dont les effets permanents sont retirés en même temps.
+ */
+async function saveWith(change: (current: Program[]) => Program[], cleared: string[] = []) {
+  const metadata = await OBR.scene.getMetadata();
+  await OBR.scene.setMetadata({
+    [FX_PROGRAMS_KEY]: change(programsIn(metadata)),
+    ...(cleared.length ? { [FX_DURABLE_KEY]: withoutProgramEffects(durablesIn(metadata), cleared) } : {}),
+  });
 }
 
-const rhythm = ({ min, max, offset, shots }: Program) =>
+/** Série terminée, mais ses effets permanents sont encore sur la carte. */
+const hasLeftovers = ({ id, active }: Program) => !active && effects.some(({ program }) => program?.id === id);
+
+const rhythm = ({ min, max, offset, shots, permanent, order, anchors, style }: Program) =>
   [
     min === max ? t("program.every", { min }) : t("program.everyRange", { min, max }),
     offset > 0 ? t("program.offset", { offset }) : "",
     shots === null ? "" : t(shots > 1 ? "program.shots" : "program.shot", { count: shots }),
+    permanent ? t("program.permanentTag") : "",
+    order === "sequence" && hasOrderChoice(style, anchors.length) ? t("program.sequenceTag") : "",
   ]
     .filter(Boolean)
     .join(", ");
@@ -60,9 +78,12 @@ const rhythm = ({ min, max, offset, shots }: Program) =>
 const picto = ({ style, element }: Program) =>
   `<svg class="picto" viewBox="0 0 24 24" aria-hidden="true" style="color: ${elementColor(element)}">${STYLE_ICONS[style]}</svg>`;
 
-function toggleButton({ id, name, active }: Program) {
+function toggleButton(program: Program) {
+  const { id, name, active } = program;
   const action = t(active ? "program.deactivate" : "program.activate", { name: escapeHtml(name) });
-  return `<button type="button" class="btn toggle ${active ? "on" : ""}" data-toggle="${escapeHtml(id)}" title="${action}" aria-label="${action}">${active ? "■" : "▶"}</button>`;
+  const clear = t("program.clearNamed", { name: escapeHtml(name) });
+  return `<button type="button" class="btn toggle ${active ? "on" : ""}" data-toggle="${escapeHtml(id)}" title="${action}" aria-label="${action}">${active ? "■" : "▶"}</button>
+    ${hasLeftovers(program) ? `<button type="button" class="btn" data-clear="${escapeHtml(id)}" title="${clear}" aria-label="${clear}">■</button>` : ""}`;
 }
 
 function programRow(program: Program) {
@@ -74,6 +95,7 @@ function programRow(program: Program) {
         <span class="name">${escapeHtml(name)}</span>
         <small>${escapeHtml(`${styleLabel(style)} · ${elementLabel(element)}`)}</small>
         <small>${escapeHtml(rhythm(program))}</small>
+        ${hasLeftovers(program) ? `<small>${t("program.finished")}</small>` : ""}
       </div>
       ${toggleButton(program)}
       <button type="button" class="btn" data-edit="${escapeHtml(id)}" aria-label="${t("action.editNamed", { name: escapeHtml(name) })}" title="${t("action.edit")}">✎</button>
@@ -136,13 +158,17 @@ function compactGroup(group: string, members: Program[]) {
 }
 
 function bindToggles() {
+  // Arrêter retire les effets permanents ; une série qui se termine seule ne passe pas par ici.
   const setActive = (ids: string[], active: boolean) =>
-    saveWith((current) => withActive(current, ids, active, Date.now())).catch(warn);
+    saveWith((current) => withActive(current, ids, active, Date.now()), active ? [] : ids).catch(warn);
   app.querySelectorAll<HTMLButtonElement>("[data-toggle]").forEach((button) => {
     button.onclick = () => {
       const program = programs.find(({ id }) => id === button.dataset.toggle);
       if (program) setActive([program.id], !program.active);
     };
+  });
+  app.querySelectorAll<HTMLButtonElement>("[data-clear]").forEach((button) => {
+    button.onclick = () => setActive([button.dataset.clear!], false);
   });
   const groupIds = (group?: string) =>
     programs.filter((program) => program.group === group).map(({ id }) => id);
@@ -200,6 +226,8 @@ function renderList() {
       shots: null,
       active: false,
       startedAt: 0,
+      permanent: false,
+      order: "random",
     };
     openForm();
   };
@@ -222,7 +250,7 @@ function renderList() {
         return;
       }
       confirmingDelete = undefined;
-      saveWith((current) => current.filter((program) => program.id !== id)).catch(warn);
+      saveWith((current) => current.filter((program) => program.id !== id), [id]).catch(warn);
     };
   });
 }
@@ -232,7 +260,7 @@ function openForm() {
   confirmingDelete = undefined;
   openPicker = undefined;
   renderForm();
-  post({ type: "draft", anchors: draft!.anchors });
+  postDraft();
 }
 
 /** Garde ce qui est saisi avant de redessiner le formulaire. */
@@ -251,11 +279,21 @@ function captureForm() {
     max: number("max") ?? draft.max,
     offset: number("offset") ?? 0,
     shots: number("shots") ?? null,
+    permanent: app.querySelector<HTMLInputElement>("#permanent")?.checked ?? false,
   };
 }
 
+/** Avec un seul parcours possible, ou pour une chaîne qui suit déjà l'ordre, il n'y a rien à choisir. */
+const hasOrderChoice = (style: StyleId, count: number) => style !== "chaine" && count > anchorsNeeded(style);
+
+function orderRow({ order }: Program) {
+  const option = (value: PointOrder, label: string) =>
+    `<option value="${value}" ${order === value ? "selected" : ""}>${label}</option>`;
+  return `<label class="inline"><span>${t("program.order")}</span><select id="order">${option("random", t("program.orderRandom"))}${option("sequence", t("program.orderSequence"))}</select></label>`;
+}
+
 function anchorsHtml() {
-  const { anchors, style } = draft!;
+  const { anchors, style, order } = draft!;
   const rows = anchors
     .map(
       ({ at, token }, index) => `
@@ -269,18 +307,28 @@ function anchorsHtml() {
     )
     .join("");
   const directed = STYLES[style].directed;
+  const sequence = order === "sequence";
   const note = style === "chaine"
     ? t("program.chainNote")
     : directed
-    ? t("program.directedNote")
-    : t("program.areaNote");
+    ? t(sequence ? "program.directedSequenceNote" : "program.directedNote")
+    : t(sequence ? "program.areaSequenceNote" : "program.areaNote");
   return `
     ${rows || `<p class="empty">${t("program.noPoint", { count: anchorsNeeded(style) })}</p>`}
+    ${hasOrderChoice(style, anchors.length) ? orderRow(draft!) : ""}
     <button type="button" id="pick" class="btn wide-action ${picking ? "picking" : ""}" ${anchors.length >= MAX_ANCHORS && !picking ? "disabled" : ""}>${t(picking ? "program.stopPicking" : "program.startPicking")}</button>
     <p class="note">${picking ? t("program.pickingHelp") : note}</p>`;
 }
 
 function bindAnchors() {
+  const order = app.querySelector<HTMLSelectElement>("#order");
+  if (order) {
+    order.onchange = () => {
+      draft!.order = order.value as PointOrder;
+      refreshAnchors();
+      app.querySelector<HTMLSelectElement>("#order")?.focus();
+    };
+  }
   app.querySelector<HTMLButtonElement>("#pick")!.onclick = () => {
     picking = !picking;
     post({ type: picking ? "pick-start" : "pick-stop" });
@@ -291,7 +339,7 @@ function bindAnchors() {
       const index = Number(button.dataset.moveAnchor);
       const delta = Number(button.dataset.delta) as -1 | 1;
       draft!.anchors = moveAnchor(draft!.anchors, index, delta);
-      post({ type: "draft", anchors: draft!.anchors });
+      postDraft();
       refreshAnchors();
       // Le clavier suit le point déplacé, s'il peut encore aller dans ce sens.
       const next = app.querySelector<HTMLButtonElement>(`[data-move-anchor="${index + delta}"][data-delta="${delta}"]`);
@@ -302,7 +350,7 @@ function bindAnchors() {
     button.onclick = () => {
       const index = Number(button.dataset.removeAnchor);
       draft!.anchors = draft!.anchors.filter((_, i) => i !== index);
-      post({ type: "draft", anchors: draft!.anchors });
+      postDraft();
       refreshAnchors();
     };
   });
@@ -341,12 +389,14 @@ function renderForm() {
       ${zone ? `<label class="inline"><span>${t("zone.exact", { what: exactZoneLabel(d.style) })} (<span data-unit>${escapeHtml(unit)}</span>)</span><input id="exact" type="number" min="0" step="any" value="${d.exact ?? ""}" /></label>` : ""}
       <h2>${t("program.rhythm")}</h2>
       <div class="fields">
-        <label>${t("program.minInterval")}<input id="min" type="number" min="${MIN_INTERVAL}" step="any" value="${d.min}" /></label>
-        <label>${t("program.maxInterval")}<input id="max" type="number" min="${MIN_INTERVAL}" step="any" value="${d.max}" /></label>
-        <label>${t("program.firstShot")}<input id="offset" type="number" min="0" step="any" value="${d.offset}" /></label>
+        <label>${t("program.minInterval")}<input id="min" type="number" min="${MIN_INTERVAL}" step="0.1" value="${d.min}" /></label>
+        <label>${t("program.maxInterval")}<input id="max" type="number" min="${MIN_INTERVAL}" step="0.1" value="${d.max}" /></label>
+        <label>${t("program.firstShot")}<input id="offset" type="number" min="0" step="0.1" value="${d.offset}" /></label>
         <label>${t("program.shotsField")}<input id="shots" type="number" min="1" step="1" value="${d.shots ?? ""}" /></label>
       </div>
       ${d.group ? `<p class="note">${t("program.offsetNote")}</p>` : ""}
+      <label class="permanent"><input id="permanent" type="checkbox" ${d.permanent ? "checked" : ""} /> ${t("program.permanent")}</label>
+      <p class="note">${t("program.permanentNote")}</p>
       <h2>${t("program.points")}</h2>
       <div id="anchors"></div>
       ${problem ? `<p class="error" role="alert">${escapeHtml(problem)}</p>` : ""}
@@ -403,7 +453,8 @@ function renderForm() {
       // Un programme actif repart avec ses nouveaux réglages.
       startedAt: Date.now(),
     };
-    saveWith((current) => withProgram(current, program))
+    // Ses effets déjà posés ne correspondent plus forcément à ces réglages.
+    saveWith((current) => withProgram(current, program), [program.id])
       .then(closeForm)
       .catch((error) => {
         warn(error);
@@ -418,12 +469,13 @@ function closeForm() {
   openPicker = undefined;
   if (picking) post({ type: "pick-stop" });
   picking = false;
-  post({ type: "draft", anchors: [] });
+  postDraft();
   renderList();
 }
 
 function readPrograms(metadata: Metadata) {
   programs = programsIn(metadata);
+  effects = durablesIn(metadata);
   if (compact || !draft) renderList();
 }
 
@@ -452,13 +504,17 @@ export async function setupPrograms(container: HTMLElement) {
   restoreDraft();
   window.addEventListener("pagehide", saveDraftForReload);
   OBR.broadcast.onMessage(FX_PROGRAM_CHANNEL, ({ data }) => {
-    const message = data as { type?: string; anchor?: Program["anchors"][number] } | null;
+    const message = data as { type?: string; anchor?: Program["anchors"][number]; index?: number } | null;
     if (message?.type === "picked" && picking && message.anchor && draft && draft.anchors.length < MAX_ANCHORS) {
       draft.anchors = [...draft.anchors, message.anchor];
-      post({ type: "draft", anchors: draft.anchors });
+      postDraft();
       // Le message « ajoute un point » n'a plus lieu d'être.
       problem = "";
       app.querySelector("#form .error")?.remove();
+      refresh();
+    } else if (message?.type === "moved" && draft && message.anchor && draft.anchors[message.index ?? -1]) {
+      draft.anchors = draft.anchors.map((anchor, index) => (index === message.index ? message.anchor! : anchor));
+      postDraft();
       refresh();
     } else if (message?.type === "pick-stopped") {
       picking = false;
@@ -469,12 +525,16 @@ export async function setupPrograms(container: HTMLElement) {
     unit = next;
   });
   if (await OBR.scene.isReady()) {
-    programs = programsIn(await OBR.scene.getMetadata());
+    const metadata = await OBR.scene.getMetadata();
+    programs = programsIn(metadata);
+    effects = durablesIn(metadata);
   }
   OBR.scene.onMetadataChange(readPrograms);
   // Le menu reste ouvert d'une scène à l'autre : la liste doit suivre.
   OBR.scene.onReadyChange(async (ready) => {
-    programs = ready ? programsIn(await OBR.scene.getMetadata()) : [];
+    const metadata = ready ? await OBR.scene.getMetadata() : {};
+    programs = programsIn(metadata);
+    effects = durablesIn(metadata);
     if (compact || !draft) renderList();
   });
   programLimit = limitsIn(await OBR.room.getMetadata()).programs;
@@ -482,6 +542,6 @@ export async function setupPrograms(container: HTMLElement) {
     programLimit = limitsIn(metadata).programs;
     if (compact || !draft) renderList();
   });
-  if (draft) post({ type: "draft", anchors: draft.anchors });
+  if (draft) postDraft();
   showCurrent();
 }

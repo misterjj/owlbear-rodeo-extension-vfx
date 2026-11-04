@@ -10,20 +10,49 @@
  * l'horloge fournie par Owlbear : il s'anime sans aucun message et reste à sa pleine intensité.
  * `clock()` fait avancer le mouvement au même rythme dans les deux cas, en durée de l'effet bref ;
  * `life()` donne l'avancement de son apparition et de sa disparition.
+ *
+ * Tout style peut durer. Celui qui a un état stable le garde (`DURABLE`). Celui qui n'est qu'un
+ * instant laisse une trace : la flèche plantée, la griffure (`still`), le sol brûlé (`scorch`).
+ * Seule la téléportation, qui ne laisse rien, se rejoue après une courte pause (`LOOP`).
+ * Le corps de ces effets lit `t` : `timing.main` le déclare pour eux, `BRIEF` le reçoit directement.
  */
 interface Timing {
   uniform: string;
   clock: (seconds: number) => string;
   life: string;
+  main: string;
 }
 
-const BRIEF: Timing = { uniform: "uniform float t;", clock: () => "t", life: "t" };
+const BRIEF: Timing = { uniform: "uniform float t;", clock: () => "t", life: "t", main: "" };
 // Le modulo évite de perdre en précision au bout de plusieurs heures.
 const DURABLE: Timing = {
   uniform: "uniform float time;",
   clock: (seconds) => `mod(time, 1000.0) / ${seconds.toFixed(1)}`,
   life: "0.5",
+  main: "float t = life();",
 };
+
+// `cycle` : durée de l'effet en secondes, suivie d'une pause. La graine évite que tous se rejouent ensemble.
+const LOOP_LIFE = "min(mod(mod(time, 1000.0) + seed * 7.0, cycle * 1.6) / cycle, 1.0)";
+const LOOP: Timing = {
+  uniform: "uniform float time;\nuniform float cycle;",
+  clock: () => LOOP_LIFE,
+  life: LOOP_LIFE,
+  main: "float t = life();",
+};
+
+/**
+ * Effet qui tient : un seul objet, du début à la fin. `appear` part de 0 pendant son apparition et
+ * s'arrête à 0,5, le milieu de sa vie. Son mouvement ne dépend que de l'horloge : rien ne saute.
+ */
+const SUSTAINED: Timing = {
+  ...DURABLE,
+  uniform: "uniform float time;\nuniform float appear;",
+  life: "appear",
+};
+
+/** L'effet figé à cet instant de son animation. */
+const still = (moment: number): Timing => ({ ...DURABLE, life: moment.toFixed(2) });
 
 const common = (timing: Timing, seconds: number) => `
 uniform mat3 model;
@@ -85,15 +114,14 @@ vec2 local(float2 coord) {
 }
 `;
 
-const COMMON = common(BRIEF, 1);
-
-export const EXPLOSION_SKSL = `${COMMON}
+const explosion = (timing: Timing) => `${common(timing, 1.5)}
 uniform vec3 smoke;
 uniform float radius;
 uniform float rough;
 uniform float shock;
 
 half4 main(float2 coord) {
+  ${timing.main}
   vec2 p = local(coord) / radius;
   float d = length(p);
   if (d > 1.4) return half4(0.0);
@@ -148,11 +176,12 @@ half4 main(float2 coord) {
 }
 `;
 
-export const PROJECTILE_SKSL = `${COMMON}
+const projectile = (timing: Timing) => `${common(timing, 1)}
 uniform vec2 target;
 uniform float width;
 
 half4 main(float2 coord) {
+  ${timing.main}
   vec2 p = local(coord);
   float len = max(length(target), 1.0);
   vec2 dir = target / len;
@@ -239,13 +268,14 @@ half4 main(float2 coord) {
 }
 `;
 
-export const BEAM_SKSL = `${COMMON}
+const beam = (timing: Timing) => `${common(timing, 1)}
 uniform vec2 target;
 uniform float width;
 uniform float jag;
 uniform float radiant;
 
 half4 main(float2 coord) {
+  ${timing.main}
   vec2 p = local(coord);
   float len = max(length(target), 1.0);
   vec2 dir = target / len;
@@ -260,7 +290,7 @@ half4 main(float2 coord) {
 
   // Le rayon ondule, ou se brise en zigzag pour la foudre, mais reste fixé à ses deux bouts.
   float ends = smoothstep(0.0, len * 0.08, along) * smoothstep(0.0, len * 0.08, len - along);
-  float jitter = floor(t * 18.0) * (0.2 + jag * 0.8);
+  float jitter = floor(clock() * 18.0) * (0.2 + jag * 0.8);
   float wobble = (fbm(vec2(along / width * (0.12 + jag * 0.12) + seed, jitter)) - 0.5) * width * (1.2 + jag * 8.0);
   // Une énergie pure file tout droit.
   float a = abs(across - wobble * ends * (1.0 - max(radiant, sonic))) / width;
@@ -291,13 +321,14 @@ half4 main(float2 coord) {
 }
 `;
 
-export const CONE_SKSL = `${COMMON}
+const cone = (timing: Timing) => `${common(timing, 1.2)}
 uniform vec2 target;
 uniform vec3 smoke;
 uniform float rough;
 uniform float radiant;
 
 half4 main(float2 coord) {
+  ${timing.main}
   vec2 p = local(coord);
   float len = max(length(target), 1.0);
   vec2 dir = target / len;
@@ -315,7 +346,7 @@ half4 main(float2 coord) {
     float front = 1.0 - r / reach;
     float mask = smoothstep(0.0, 0.3, side) * smoothstep(0.0, 0.14, front);
     float rays = 0.34 + pow(noise(vec2(angle * 13.0 + seed, seed)), 1.4) * 0.8
-      + noise(vec2(angle * 31.0 - seed, t * 2.5)) * 0.2;
+      + noise(vec2(angle * 31.0 - seed, clock() * 2.5)) * 0.2;
     float fade = 1.0 - smoothstep(0.5, 1.0, t);
     float light = mask * rays * (1.0 - r / len * 0.72) * fade;
     float source = exp(-r * r / (len * len * 0.012)) * fade * smoothstep(-0.2, 0.1, along / len);
@@ -334,7 +365,7 @@ half4 main(float2 coord) {
     return half4(ramp(clamp(sound * 1.2 + 0.2, 0.0, 1.0)) * alpha, alpha);
   }
 
-  float n = fbm(vec2(r / len * 5.0 * rough - t * 6.0 + seed, angle * 3.0 * rough));
+  float n = fbm(vec2(r / len * 5.0 * rough - clock() * 6.0 + seed, angle * 3.0 * rough));
 
   // Le cône s'ouvre à partir du lanceur, avec un bord irrégulier.
   float edge = 1.0 - abs(angle) / 0.56 + (n - 0.5) * 0.7 * smoothstep(0.0, 0.3, r / len);
@@ -347,7 +378,7 @@ half4 main(float2 coord) {
 
   // Nuage qui traîne quand le souffle s'éteint.
   float smokeAlpha = mask * smoothstep(0.25, 0.55, t) * (1.0 - smoothstep(0.65, 1.0, t)) * 0.55
-    * smoothstep(0.32, 0.6, fbm(vec2(r / len * 3.0 + seed, angle * 2.0 + t)));
+    * smoothstep(0.32, 0.6, fbm(vec2(r / len * 3.0 + seed, angle * 2.0 + clock())));
   vec3 color = smoke * smokeAlpha;
   float alpha = smokeAlpha;
   color = ramp(heat) * bodyAlpha + color * (1.0 - bodyAlpha);
@@ -395,11 +426,12 @@ half4 main(float2 coord) {
 }
 `;
 
-export const ARROW_SKSL = `${COMMON}
+const arrow = (timing: Timing) => `${common(timing, 1)}
 uniform vec2 target;
 uniform float width;
 
 half4 main(float2 coord) {
+  ${timing.main}
   vec2 p = local(coord);
   float len = max(length(target), 1.0);
   vec2 dir = target / len;
@@ -435,11 +467,12 @@ half4 main(float2 coord) {
 }
 `;
 
-export const SLASH_SKSL = `${COMMON}
+const slash = (timing: Timing) => `${common(timing, 1)}
 uniform float radius;
 uniform float claws;
 
 half4 main(float2 coord) {
+  ${timing.main}
   vec2 raw = local(coord) / radius;
   if (length(raw) > 1.5) return half4(0.0);
 
@@ -478,6 +511,7 @@ half4 main(float2 coord) {
     sparks += exp(-dot(offset, offset) * 1400.0);
   }
   sparks *= smoothstep(0.1, 0.16, t) * (1.0 - smoothstep(0.45, 0.8, t));
+  ${timing === BRIEF ? "" : "sparks = 0.0;"}
 
   float fade = 1.0 - smoothstep(0.5, 1.0, t);
   float heat = clamp(cut + edge * 0.7 + sparks, 0.0, 1.0) * fade;
@@ -486,10 +520,11 @@ half4 main(float2 coord) {
 }
 `;
 
-export const BITE_SKSL = `${COMMON}
+const bite = (timing: Timing) => `${common(timing, 1)}
 uniform float radius;
 
 half4 main(float2 coord) {
+  ${timing.main}
   vec2 raw = local(coord) / radius;
   if (length(raw) > 1.5) return half4(0.0);
 
@@ -541,6 +576,7 @@ half4 main(float2 coord) {
     sparks += exp(-dot(offset, offset) * 1300.0);
   }
   sparks *= bitten * (1.0 - smoothstep(0.5, 0.85, t));
+  ${timing === BRIEF ? "" : "sparks = 0.0;"}
   float flash = exp(-dot(p, p) * 7.0) * bitten * (1.0 - smoothstep(0.26, 0.48, t)) * 0.8;
 
   float visible = smoothstep(0.0, 0.05, t) * (1.0 - smoothstep(0.5, 0.78, t));
@@ -561,12 +597,13 @@ half4 main(float2 coord) {
 }
 `;
 
-export const METEOR_SKSL = `${COMMON}
+const meteor = (timing: Timing) => `${common(timing, 2.6)}
 uniform vec3 smoke;
 uniform float radius;
 uniform float rough;
 
 half4 main(float2 coord) {
+  ${timing.main}
   vec2 p = local(coord) / radius;
   float d = length(p);
   // La chute dure jusqu'à IMPACT, le reste du temps appartient à l'explosion et au cratère.
@@ -670,16 +707,17 @@ half4 main(float2 coord) {
 }
 `;
 
-export const HEAL_SKSL = `${COMMON}
+const heal = (timing: Timing) => `${common(timing, 1.8)}
 uniform float radius;
 
 half4 main(float2 coord) {
+  ${timing.main}
   vec2 p = local(coord) / radius;
   float d = length(p);
   if (d > 1.9) return half4(0.0);
 
   float fade = smoothstep(0.0, 0.15, t) * (1.0 - smoothstep(0.7, 1.0, t));
-  float pulse = 0.75 + 0.25 * sin(t * 14.0);
+  float pulse = 0.75 + 0.25 * sin(clock() * 14.0);
   float glow = exp(-d * d * 2.2) * 0.42 * pulse;
 
   // Petites croix lumineuses qui montent.
@@ -688,7 +726,7 @@ half4 main(float2 coord) {
     float index = float(i) + seed;
     float x = (hash(vec2(index, 1.9)) - 0.5) * 1.7;
     float y = (hash(vec2(index, 3.7)) - 0.5) * 1.1;
-    float phase = fract(t * 1.3 + hash(vec2(index, 6.3)));
+    float phase = fract(clock() * 1.3 + hash(vec2(index, 6.3)));
     float size = 0.75 + hash(vec2(index, 8.1)) * 0.6;
     vec2 q = (p - vec2(x, y + 0.55 - phase * 1.35)) / size;
     float bar = max(
@@ -704,16 +742,12 @@ half4 main(float2 coord) {
 }
 `;
 
-export const TELEPORT_SKSL = `${COMMON}
-uniform float radius;
-uniform float appear;
-
-half4 main(float2 coord) {
-  vec2 p = local(coord) / radius;
+/** Départ : tout converge vers le centre. Arrivée : tout en repart. */
+const PORTAL = `
+half4 portal(vec2 p, float appear, float t) {
   float d = length(p);
   if (d > 1.5) return half4(0.0);
 
-  // Départ : tout converge vers le centre. Arrivée : tout en repart.
   float u = appear > 0.5 ? t : 1.0 - t;
   float spread = 1.0 - pow(1.0 - u, 2.5);
   float fade = appear > 0.5 ? 1.0 - smoothstep(0.55, 1.0, t) : smoothstep(0.0, 0.2, t) * (1.0 - smoothstep(0.85, 1.0, t));
@@ -734,6 +768,29 @@ half4 main(float2 coord) {
   float heat = clamp(ring + flash + motes, 0.0, 1.0) * fade;
   float alpha = smoothstep(0.0, 0.45, heat);
   return half4(ramp(0.3 + heat * 0.7) * alpha, alpha);
+}
+`;
+
+const teleport = `${common(BRIEF, 1)}
+uniform float radius;
+uniform float appear;
+${PORTAL}
+half4 main(float2 coord) {
+  return portal(local(coord) / radius, appear, t);
+}
+`;
+
+/** En boucle, les deux extrémités se répondent dans le même effet. */
+const teleportLoop = `${common(LOOP, 1)}
+uniform float radius;
+uniform vec2 target;
+${PORTAL}
+half4 main(float2 coord) {
+  ${LOOP.main}
+  vec2 p = local(coord);
+  half4 leaving = portal(p / radius, 0.0, clamp(t / 0.7, 0.0, 1.0));
+  half4 arriving = portal((p - target) / radius, 1.0, clamp((t - 0.3) / 0.7, 0.0, 1.0));
+  return arriving + leaving * (1.0 - arriving.a);
 }
 `;
 
@@ -1004,6 +1061,53 @@ half4 main(float2 coord) {
 }
 `;
 
+/** Ce qui reste après un impact : un sol noirci, des braises et de petites flammes qui s'attardent. */
+const SCORCH_SKSL = `${common(DURABLE, 3)}
+uniform vec3 smoke;
+uniform float radius;
+
+half4 main(float2 coord) {
+  vec2 p = local(coord) / radius;
+  float d = length(p);
+  if (d > 1.5) return half4(0.0);
+
+  float now = clock();
+  float edge = 1.0 - d + (fbm(p * 2.6 + seed) - 0.5) * 0.7;
+  float patchAlpha = smoothstep(0.0, 0.22, edge) * 0.82;
+  vec3 color = smoke * 0.28 * patchAlpha;
+  float alpha = patchAlpha;
+
+  // Fissures encore chaudes, qui rougeoient lentement.
+  float crack = abs(fbm(p * 3.2 + seed * 1.7) - 0.5);
+  float glowing = smoothstep(0.42, 0.7, noise(p * 3.0 + vec2(seed, now * 2.4)));
+  float embers = (1.0 - smoothstep(0.0, 0.022, crack)) * glowing * smoothstep(0.0, 0.25, edge) * 0.85;
+  color = ramp(0.8) * embers + color * (1.0 - embers);
+  alpha = embers + alpha * (1.0 - embers);
+
+  // Petites flammes qui naissent et s'éteignent par endroits.
+  float tongues = fbm(p * 3.2 + vec2(seed, now * 3.4));
+  float fire = smoothstep(0.56, 0.72, tongues) * smoothstep(0.1, 0.55, edge) * (1.0 - sonic);
+  color = ramp(smoothstep(0.56, 0.86, tongues)) * fire + color * (1.0 - fire);
+  alpha = fire + alpha * (1.0 - fire);
+
+  // Une onde ne brûle pas : le sol continue de vibrer.
+  float echo = sonic * waves(d * 4.0, 3.0) * smoothstep(0.0, 0.3, edge) * 0.6;
+  color = palette[2] * echo + color * (1.0 - echo);
+  alpha = echo + alpha * (1.0 - echo);
+  return half4(color, alpha);
+}
+`;
+
+export const EXPLOSION_SKSL = explosion(BRIEF);
+export const PROJECTILE_SKSL = projectile(BRIEF);
+export const BEAM_SKSL = beam(BRIEF);
+export const CONE_SKSL = cone(BRIEF);
+export const ARROW_SKSL = arrow(BRIEF);
+export const SLASH_SKSL = slash(BRIEF);
+export const BITE_SKSL = bite(BRIEF);
+export const METEOR_SKSL = meteor(BRIEF);
+export const HEAL_SKSL = heal(BRIEF);
+export const TELEPORT_SKSL = teleport;
 export const RAIN_SKSL = rain(BRIEF);
 export const AURA_SKSL = aura(BRIEF);
 export const WALL_SKSL = wall(BRIEF);
@@ -1013,14 +1117,26 @@ export const CLOUD_SKSL = cloud(BRIEF);
 export const TRANSFORMATION_SKSL = transformation(BRIEF);
 export const FLAME_SKSL = flame(BRIEF);
 
-/** Versions continues des styles qui peuvent durer. */
+/** Version continue de chaque style. */
 export const DURABLE_SKSL = {
-  pluie: rain(DURABLE),
-  aura: aura(DURABLE),
-  mur: wall(DURABLE),
-  dome: dome(DURABLE),
-  cube: cube(DURABLE),
-  nuage: cloud(DURABLE),
-  transformation: transformation(DURABLE),
-  flamme: flame(DURABLE),
+  pluie: rain(SUSTAINED),
+  aura: aura(SUSTAINED),
+  mur: wall(SUSTAINED),
+  dome: dome(SUSTAINED),
+  cube: cube(SUSTAINED),
+  nuage: cloud(SUSTAINED),
+  transformation: transformation(SUSTAINED),
+  flamme: flame(SUSTAINED),
+  rayon: beam(SUSTAINED),
+  chaine: beam(SUSTAINED),
+  cone: cone(SUSTAINED),
+  soin: heal(SUSTAINED),
+  fleche: arrow(still(1)),
+  coup: slash(still(0.45)),
+  griffes: slash(still(0.45)),
+  morsure: bite(still(0.78)),
+  projectile: SCORCH_SKSL,
+  explosion: SCORCH_SKSL,
+  meteore: SCORCH_SKSL,
+  teleportation: teleportLoop,
 };
