@@ -28,6 +28,7 @@ import {
   type Program,
 } from "./fx-programs";
 import { bindResize, fitCompactHeight, resizeButton, setupWindowDrag, windowPrefs } from "./window-drag";
+import { watchSceneUnit } from "./scene-unit";
 import "./programmes.css";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -342,7 +343,7 @@ function renderForm() {
         <label>Élément<select id="element">${options(ELEMENT_IDS, (id) => ELEMENTS[id].label, d.element)}</select></label>
         <label>Style<select id="style">${options(STYLE_IDS, (id) => STYLES[id].label, d.style)}</select></label>
         <label>Taille<select id="size">${options(SIZE_IDS, (id) => id, d.size)}</select></label>
-        ${zone ? `<label>${exactZoneLabel(d.style)} exact (${escapeHtml(unit)})<input id="exact" type="number" min="0" step="any" value="${d.exact ?? ""}" /></label>` : ""}
+        ${zone ? `<label>${exactZoneLabel(d.style)} exact (<span data-unit>${escapeHtml(unit)}</span>)<input id="exact" type="number" min="0" step="any" value="${d.exact ?? ""}" /></label>` : ""}
       </div>
       <h2>Rythme</h2>
       <div class="fields">
@@ -425,8 +426,10 @@ OBR.onReady(async () => {
       refresh();
     }
   });
+  await watchSceneUnit((next) => {
+    unit = next;
+  });
   if (await OBR.scene.isReady()) {
-    unit = (await OBR.scene.grid.getScale()).parsed.unit || unit;
     programs = programsIn(await OBR.scene.getMetadata());
   }
   OBR.scene.onMetadataChange(readPrograms);

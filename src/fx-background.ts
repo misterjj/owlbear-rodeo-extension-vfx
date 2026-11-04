@@ -26,12 +26,14 @@ import {
   buildMessage,
   coneTarget,
   defaultSpellName,
+  cubeOnFace,
   durableChanges,
   durableItemId,
   durablesIn,
   effectScale,
   exactCells,
   firesFromToken,
+  startsOnFace,
   fitsCellCenter,
   isDurable,
   loadChoice,
@@ -85,6 +87,7 @@ import {
   DURABLE_SKSL,
   EXPLOSION_SKSL,
   HEAL_SKSL,
+  METEOR_SKSL,
   PROJECTILE_SKSL,
   RAIN_SKSL,
   SLASH_SKSL,
@@ -93,8 +96,8 @@ import {
   WALL_SKSL,
 } from "./fx-shaders";
 
-const PANEL_HEIGHT_GM = 830;
-const PANEL_HEIGHT_PLAYER = 724;
+const PANEL_HEIGHT_GM = 890;
+const PANEL_HEIGHT_PLAYER = 784;
 const PROGRAMS_HEIGHT = 620;
 const WHEEL_SIZE = 340;
 const FRAME_MS = 33;
@@ -356,7 +359,11 @@ async function play(message: FxMessage, limit: number) {
       await animate(
         CUBE_SKSL,
         at,
-        [...common, { name: "radius", value: (dpi * STYLES.cube.reach * scale) / 2 }],
+        [
+          ...common,
+          { name: "radius", value: (dpi * STYLES.cube.reach * scale) / 2 },
+          { name: "angle", value: message.angle ?? 0 },
+        ],
         scaledDuration(3000, scale),
       );
       break;
@@ -366,6 +373,19 @@ async function play(message: FxMessage, limit: number) {
         at,
         [...common, { name: "radius", value: dpi * STYLES.aura.reach * scale }],
         scaledDuration(2200, scale),
+      );
+      break;
+    case "meteore":
+      await animate(
+        METEOR_SKSL,
+        at,
+        [
+          ...common,
+          { name: "smoke", value: { x: look.smoke[0], y: look.smoke[1], z: look.smoke[2] } },
+          { name: "radius", value: dpi * STYLES.meteore.reach * scale },
+          { name: "rough", value: look.rough },
+        ],
+        scaledDuration(2600, scale),
       );
       break;
     case "transformation":
@@ -514,7 +534,7 @@ function durableSpec(entry: DurableEntry, at: Point, dpi: number) {
       return {
         sksl: DURABLE_SKSL.cube,
         position: at,
-        uniforms: [...common, { ...radius, value: radius.value / 2 }],
+        uniforms: [...common, { ...radius, value: radius.value / 2 }, { name: "angle", value: entry.angle ?? 0 }],
       };
     case "pluie":
       return {
@@ -557,7 +577,10 @@ function durableSpec(entry: DurableEntry, at: Point, dpi: number) {
 async function addDurableItem(entry: DurableEntry, carriers: Map<string, Item>, dpi: number) {
   const carrier = entry.carrier && carriers.get(entry.carrier.id);
   // La position vient du token à cet instant : il a pu bouger depuis que l'effet a été lancé.
-  const at = carrier ? (await OBR.scene.items.getItemBounds([carrier.id])).center : entry.at;
+  const center = carrier ? (await OBR.scene.items.getItemBounds([carrier.id])).center : entry.at;
+  const at = carrier && entry.offset
+    ? { x: center.x + entry.offset.x, y: center.y + entry.offset.y }
+    : center;
   const spec = durableSpec(entry, at, dpi);
   if (!spec) return;
   const builder = buildEffect()
@@ -839,6 +862,7 @@ async function placeDurable(
   at: Point,
   token: TokenArea | undefined,
   from?: Point,
+  placement?: { offset: Point; angle: number },
 ) {
   const carrier = token && (await canMove(token)) ? token : undefined;
   const [metadata, multiplier] = await Promise.all([OBR.scene.getMetadata(), cellValue()]);
@@ -866,6 +890,8 @@ async function placeDurable(
     at,
     ...(from ? { from } : {}),
     ...(carrier ? { carrier: { id: carrier.id, name: carrier.name } } : {}),
+    ...(carrier && placement ? { offset: placement.offset } : {}),
+    ...(placement ? { angle: placement.angle } : {}),
     gmOnly: choice.gmOnly,
     owner: OBR.player.id,
   };
@@ -882,7 +908,7 @@ let aiming: { spell: Favorite; tool: string; mode: string | undefined } | undefi
 /** Réglage à appliquer : le sort visé s'il y en a un, sinon celui du panneau. */
 function currentChoice(): FxChoice {
   const saved = loadChoice(localStorage);
-  const { element, style, size, exact, durable } = aiming?.spell ?? saved;
+  const { element, style, size, exact, durable, onFace } = aiming?.spell ?? saved;
   // Un réglage laissé par une partie de MJ dans ce navigateur ne vaut pas pour un joueur.
   return {
     element,
@@ -891,7 +917,25 @@ function currentChoice(): FxChoice {
     exact,
     durable: durable === true,
     gmOnly: saved.gmOnly && role === "GM",
+    ...(onFace === true ? { onFace: true } : {}),
   };
+}
+
+/** Ce cube durable est-il déjà allumé sur ce token ? Le relancer l'éteint, sans rien viser. */
+async function isLitOn(token: TokenArea, choice: FxChoice) {
+  return (
+    isDurable(choice) &&
+    (await canMove(token)) &&
+    durablesIn(await OBR.scene.getMetadata()).some(
+      (entry) => entry.carrier?.id === token.id && sameDurable(entry, choice),
+    )
+  );
+}
+
+/** Côté du cube en unités de la carte, avec ses réglages actuels. */
+async function cubeSide(choice: FxChoice) {
+  const [dpi, multiplier] = await Promise.all([OBR.scene.grid.getDpi(), cellValue()]);
+  return dpi * STYLES.cube.reach * effectScale("cube", choice.size, exactCells(choice, multiplier));
 }
 
 async function endAiming() {
@@ -906,7 +950,8 @@ async function endAiming() {
 async function castFromToken(tokenId: string, spell: Favorite) {
   const token = (await loadTokenAreas()).find(({ id }) => id === tokenId);
   if (!token) return;
-  if (firesFromToken(spell)) {
+  const lit = startsOnFace(spell) && (await isLitOn(token, { ...currentChoice(), ...spell, durable: spell.durable === true }));
+  if (firesFromToken(spell) || lit) {
     const choice = { ...currentChoice(), ...spell, durable: spell.durable === true };
     if (isDurable(choice)) {
       await placeDurable(choice, spell.name, token.center, token);
@@ -918,7 +963,7 @@ async function castFromToken(tokenId: string, spell: Favorite) {
   const [tool, mode] = await Promise.all([OBR.tool.getActiveTool(), OBR.tool.getActiveToolMode()]);
   aiming = { spell, tool: aiming?.tool ?? tool, mode: aiming ? aiming.mode : mode };
   await clearSource();
-  if (STYLES[spell.style].directed) await markSource(token.center, token);
+  if (STYLES[spell.style].directed || startsOnFace(spell)) await markSource(token.center, token);
   await OBR.tool.activateTool(FX_TOOL_ID);
   await OBR.tool.activateMode(FX_TOOL_ID, MODE_ID);
 }
@@ -959,10 +1004,17 @@ let pendingMove: ToolEvent | undefined;
 async function drawPreview(event: ToolEvent) {
   const choice = currentChoice();
   const token = await tokenUnderPointer(event);
-  const point = token?.center ?? event.pointerPosition;
+  let point = token?.center ?? event.pointerPosition;
+  let angle = 0;
   const [dpi, multiplier] = await Promise.all([OBR.scene.grid.getDpi(), cellValue()]);
   const scale = effectScale(choice.style, choice.size, exactCells(choice, multiplier));
-  const outline = previewOutline(choice.style, source, point, dpi * STYLES[choice.style].reach * scale);
+  // Le cube collé à sa face se montre là où il tombera, quel que soit le point survolé.
+  if (startsOnFace(choice) && sourceToken) {
+    const placed = cubeOnFace(sourceToken.center, event.pointerPosition, sourceToken.width, dpi * STYLES.cube.reach * scale);
+    point = { x: sourceToken.center.x + placed.offset.x, y: sourceToken.center.y + placed.offset.y };
+    angle = placed.angle;
+  }
+  const outline = previewOutline(choice.style, source, point, dpi * STYLES[choice.style].reach * scale, angle);
   if (!toolActive) return;
   if (!outline || picking) {
     if (previewShown) await hidePreview();
@@ -1068,7 +1120,21 @@ async function handleClick(event: ToolEvent) {
   const [token, multiplier] = await Promise.all([tokenUnderPointer(event), cellValue()]);
   const point = token?.center ?? event.pointerPosition;
   const label = aiming?.spell.name ?? defaultSpellName(choice);
-  if (!STYLES[choice.style].directed) {
+  if (startsOnFace(choice) && sourceToken) {
+    // Second clic : la direction du cube autour du token. Recliquer sur le token annule.
+    const carrier = sourceToken;
+    await clearSource();
+    if (token?.id !== carrier.id) {
+      const placed = cubeOnFace(carrier.center, event.pointerPosition, carrier.width, await cubeSide(choice));
+      const at = { x: carrier.center.x + placed.offset.x, y: carrier.center.y + placed.offset.y };
+      if (isDurable(choice)) await placeDurable(choice, label, at, carrier, undefined, placed);
+      else send({ ...buildMessage(choice, at, undefined, multiplier, randomSeed()), angle: placed.angle });
+    }
+    await endAiming();
+  } else if (startsOnFace(choice) && token && !(await isLitOn(token, choice))) {
+    // Premier clic sur un token : on attend la direction. Sur la carte, le cube reste centré sur le clic.
+    await markSource(token.center, token);
+  } else if (!STYLES[choice.style].directed) {
     if (source) await clearSource();
     if (isDurable(choice)) await placeDurable(choice, label, point, token);
     else send(buildMessage(choice, point, undefined, multiplier, randomSeed()));

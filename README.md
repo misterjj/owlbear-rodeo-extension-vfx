@@ -11,16 +11,20 @@ Le dernier choix est conservé.
 - **Élément :** feu, glace, foudre, poison, acide, ténèbres, lumière, force, nécrotique, psychique,
   tonnerre, physique, sang, eau, terre, vent ;
 - **Style :**
-  - coup, griffes, morsure, explosion, pluie, dôme, cube, nuage, aura, transformation et soin se lancent d'un clic sur la carte ;
+  - coup, griffes, morsure, explosion, météore, pluie, dôme, cube, nuage, aura, transformation et soin se lancent d'un clic sur la carte ;
   - flèche, projectile, rayon, cône, mur et téléportation demandent deux clics : le point de départ,
     puis la cible ou la direction (`Échap` pour annuler) ;
   - chaîne part du lanceur, puis saute à chaque nouvelle cible cliquée (`Échap` pour finir) ;
-- **Taille :** XS, S, M, L ou XL. Pour un sort de zone (explosion, pluie, dôme, cube, nuage, aura, transformation, soin,
+- **Taille :** XS, S, M, L ou XL. Pour un sort de zone (explosion, météore, pluie, dôme, cube, nuage, aura, transformation, soin,
   cône), un rayon, une longueur ou un côté exact se donne dans l'unité de la scène.
 
 Glisse la barre de titre du panneau pour le déplacer. Le bouton **–** le réduit à l'essentiel : l'effet
 en cours, les favoris pour en changer et les effets durables. La place et le format sont conservés, et
 la fenêtre des programmes fonctionne de la même façon.
+
+Un cube lancé depuis un token peut être **au centre** ou **sur une face**, comme pour *Vague tonnante* :
+sur une face, un second clic choisit la direction, n'importe où autour du token : le cube se colle à lui
+et lui fait face. Attaché, il le suit sans changer d'orientation. Sur la carte, il reste centré sur le clic.
 
 Un contour montre la zone touchée avant de lancer. Les **favoris** enregistrent un réglage sous un
 nom, dans ce navigateur ; reprendre un nom existant le remplace.

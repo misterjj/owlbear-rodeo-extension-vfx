@@ -20,9 +20,12 @@ import {
   sameDurable,
   defaultSpellName,
   editSpell,
+  cubeOnFace,
+  startsOnFace,
   parseWheelCast,
   renameSpell,
   spellsOf,
+  unitLabel,
   wheelPositions,
   type DurableEntry,
   type Favorite,
@@ -100,6 +103,12 @@ describe("zone exacte et MJ seulement dans les messages", () => {
     gmOnly: true,
     durable: false,
   } as const;
+
+  it("nomme l'unité de la zone exacte sans mentir sur une échelle sans unité", () => {
+    expect(unitLabel({ multiplier: 1.5, unit: "m" })).toBe("m");
+    expect(unitLabel({ multiplier: 1, unit: "" })).toBe("cases");
+    expect(unitLabel({ multiplier: 5, unit: "" })).toBe("unités");
+  });
 
   it("convertit la zone dans l'unité de la scène en cases", () => {
     expect(buildMessage(full, at, undefined, 1.5, 3)).toEqual({
@@ -283,7 +292,7 @@ describe("réglages", () => {
   });
 
   it("propose tous les styles, et demande un lanceur seulement à ceux qui partent d'un point", () => {
-    expect(STYLE_IDS).toHaveLength(18);
+    expect(STYLE_IDS).toHaveLength(19);
     expect(STYLE_IDS.filter((id) => STYLES[id].directed)).toEqual([
       "fleche",
       "projectile",
@@ -317,7 +326,7 @@ describe("géométrie", () => {
 
   it("place tous les effets avec le repère fourni par Owlbear", () => {
     const sources = Object.values(shaders).filter((value) => typeof value === "string");
-    expect(sources).toHaveLength(16);
+    expect(sources).toHaveLength(17);
     for (const sksl of sources) {
       expect(sksl).toContain("uniform mat3 model;");
       expect(sksl).toContain("uniform float t;");
@@ -572,6 +581,75 @@ describe("manifest", () => {
   it("respecte la limite de description d'Owlbear", () => {
     const manifest = JSON.parse(readFileSync("public/manifest.json", "utf8"));
     expect(manifest.description.length).toBeLessThanOrEqual(128);
+  });
+});
+
+describe("cube sur une face", () => {
+  const center = { x: 100, y: 100 };
+
+  it("tourne librement autour du token, sa face contre lui", () => {
+    // Token de 150, cube de 450 : 300 entre les deux centres, quelle que soit la direction.
+    const right = cubeOnFace(center, { x: 400, y: 100 }, 150, 450);
+    expect(right.angle).toBe(0);
+    expect(right.offset.x).toBeCloseTo(300);
+    expect(right.offset.y).toBeCloseTo(0);
+    const up = cubeOnFace(center, { x: 100, y: -50 }, 150, 450);
+    expect(up.angle).toBeCloseTo(-Math.PI / 2);
+    expect(up.offset.y).toBeCloseTo(-300);
+    const diagonal = cubeOnFace(center, { x: 200, y: 200 }, 150, 450);
+    expect(diagonal.angle).toBeCloseTo(Math.PI / 4);
+    expect(Math.hypot(diagonal.offset.x, diagonal.offset.y)).toBeCloseTo(300);
+    expect(diagonal.offset.x).toBeCloseTo(diagonal.offset.y);
+  });
+
+  it("garde une direction valable si le pointeur est sur le centre", () => {
+    expect(cubeOnFace(center, center, 150, 450).angle).toBe(0);
+  });
+
+  it("transmet la rotation et ignore une valeur illisible", () => {
+    const message = { element: "feu", style: "cube", size: "M", at: center, seed: 1 };
+    expect(parseFxMessage({ ...message, angle: 1.2 })?.angle).toBe(1.2);
+    expect(parseFxMessage({ ...message, angle: "x" })?.angle).toBeUndefined();
+    expect(parseFxMessage(message)?.angle).toBeUndefined();
+  });
+
+  it("montre un aperçu tourné comme le cube", () => {
+    const { points } = previewOutline("cube", undefined, { x: 0, y: 0 }, 100, Math.PI / 4)!;
+    expect(points[0].x).toBeCloseTo(0);
+    expect(points[0].y).toBeCloseTo(-Math.SQRT2 * 50);
+  });
+
+  it("ne vaut que pour le cube", () => {
+    expect(startsOnFace({ style: "cube", onFace: true })).toBe(true);
+    expect(startsOnFace({ style: "cube" })).toBe(false);
+    expect(startsOnFace({ style: "dome", onFace: true })).toBe(false);
+  });
+
+  it("demande de viser depuis la roue, même durable", () => {
+    expect(firesFromToken({ style: "cube", durable: true })).toBe(true);
+    expect(firesFromToken({ style: "cube", durable: true, onFace: true })).toBe(false);
+  });
+
+  it("est gardé dans le réglage, les favoris et les sorts, puis oublié pour un autre style", () => {
+    const store = new Map<string, string>();
+    const storage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
+    const choice = { element: "tonnerre", style: "cube", size: "M", exact: 4.5, gmOnly: false, durable: false, onFace: true } as const;
+    saveChoice(storage, choice);
+    expect(loadChoice(storage).onFace).toBe(true);
+    const [favorite] = addFavorite([], "Vague", choice);
+    expect(favorite.onFace).toBe(true);
+    expect(matchesFavorite(favorite, choice)).toBe(true);
+    expect(matchesFavorite(favorite, { ...choice, onFace: false })).toBe(false);
+    expect(editSpell([favorite], 0, favorite)[0].onFace).toBe(true);
+    expect("onFace" in editSpell([favorite], 0, { ...favorite, style: "dome" })[0]).toBe(false);
+  });
+
+  it("garde son décalage dans la description partagée", () => {
+    const entry = { id: "a", name: "x", element: "feu", style: "cube", scale: 1, seed: 1, at: { x: 0, y: 0 }, carrier: { id: "t", name: "t" }, gmOnly: false, owner: "m", offset: { x: 300, y: 0 }, angle: 0.5 };
+    expect(durablesIn({ "vfx-owlbear/durable": [entry] })[0].offset).toEqual({ x: 300, y: 0 });
+    expect(durablesIn({ "vfx-owlbear/durable": [entry] })[0].angle).toBe(0.5);
+    expect(durablesIn({ "vfx-owlbear/durable": [{ ...entry, offset: "non" }] })).toEqual([]);
+    expect(durablesIn({ "vfx-owlbear/durable": [{ ...entry, angle: "non" }] })).toEqual([]);
   });
 });
 

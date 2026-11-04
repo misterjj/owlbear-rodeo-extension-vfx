@@ -288,6 +288,7 @@ export const STYLES = {
   chaine: { label: "Chaîne", directed: true, reach: 0, exactZone: false },
   cone: { label: "Cône", directed: true, reach: 5, exactZone: true },
   explosion: { label: "Explosion", directed: false, reach: 2.5, exactZone: true },
+  meteore: { label: "Météore", directed: false, reach: 2.5, exactZone: true },
   pluie: { label: "Pluie", directed: false, reach: 3, exactZone: true },
   mur: { label: "Mur", directed: true, reach: 0, exactZone: false },
   dome: { label: "Dôme", directed: false, reach: 2.5, exactZone: true },
@@ -329,6 +330,8 @@ export interface FxChoice extends FxCast {
   gmOnly: boolean;
   /** L'effet reste, sur la carte ou attaché à un token, jusqu'à ce qu'on le retire. */
   durable: boolean;
+  /** Cube lancé depuis un token : collé à l'une de ses faces plutôt que centré sur lui. */
+  onFace?: boolean;
 }
 
 /** La graine est transmise pour que l'effet ait la même forme chez tous les joueurs. */
@@ -339,6 +342,8 @@ export interface FxMessage extends FxCast {
   seed: number;
   /** Rayon, longueur ou côté en cases, quand une zone exacte a été demandée. */
   cells?: number;
+  /** Rotation d'un cube, en radians. */
+  angle?: number;
   gmOnly?: true;
 }
 
@@ -384,6 +389,7 @@ export function parseFxMessage(data: unknown): FxMessage | undefined {
     if (!isExact(message.cells)) return undefined;
     parsed.cells = Math.min(message.cells, MAX_CELLS);
   }
+  if (typeof message.angle === "number" && Number.isFinite(message.angle)) parsed.angle = message.angle;
   if (message.gmOnly === true) parsed.gmOnly = true;
   return parsed;
 }
@@ -431,6 +437,7 @@ export function loadChoice(storage: ChoiceStorage): FxChoice {
       exact: isExact(saved?.exact) ? saved.exact : null,
       gmOnly: saved?.gmOnly === true,
       durable: saved?.durable === true,
+      ...(saved?.onFace === true ? { onFace: true } : {}),
     };
   } catch {
     return DEFAULT_CHOICE;
@@ -493,6 +500,10 @@ export function coneTarget(from: Point, at: Point, length: number): Point {
   return { x: ((at.x - from.x) / distance) * length, y: ((at.y - from.y) / distance) * length };
 }
 
+/** Ce que vaut le nombre saisi. Une échelle sans unité qui n'est pas de 1 ne compte pas en cases. */
+export const unitLabel = ({ multiplier, unit }: { multiplier: number; unit: string }) =>
+  unit || (multiplier === 1 ? "cases" : "unités");
+
 /** Zone demandée en cases, si elle s'applique à ce style. */
 export function exactCells(choice: FxChoice, multiplier: number) {
   if (choice.exact === null || !STYLES[choice.style].exactZone) return undefined;
@@ -519,6 +530,7 @@ export interface Favorite extends FxCast {
   name: string;
   exact: number | null;
   durable?: boolean;
+  onFace?: boolean;
 }
 
 const isFavorite = (value: unknown): value is Favorite => {
@@ -562,6 +574,7 @@ export function addFavorite(
     size: choice.size,
     exact: choice.exact,
     ...(isDurable(choice) ? { durable: true } : {}),
+    ...(startsOnFace(choice) ? { onFace: true } : {}),
   };
   const key = trimmed.toLowerCase();
   const index = favorites.findIndex((other) => other.name.toLowerCase() === key);
@@ -575,7 +588,8 @@ export const matchesFavorite = (favorite: Favorite, choice: FxChoice) =>
   favorite.style === choice.style &&
   favorite.size === choice.size &&
   favorite.exact === choice.exact &&
-  Boolean(favorite.durable) === isDurable(choice);
+  Boolean(favorite.durable) === isDurable(choice) &&
+  startsOnFace(favorite) === startsOnFace(choice);
 
 export interface Outline {
   points: Point[];
@@ -595,12 +609,17 @@ export function previewOutline(
   source: Point | undefined,
   pointer: Point,
   reach: number,
+  angle = 0,
 ): Outline | undefined {
   if (style === "cube") {
     const half = reach / 2;
+    const [c, s] = [Math.cos(angle), Math.sin(angle)];
     const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
     return {
-      points: corners.map(([x, y]) => ({ x: pointer.x + x * half, y: pointer.y + y * half })),
+      points: corners.map(([x, y]) => ({
+        x: pointer.x + (x * c - y * s) * half,
+        y: pointer.y + (x * s + y * c) * half,
+      })),
       closed: true,
     };
   }
@@ -619,6 +638,21 @@ export function previewOutline(
     return { x: source.x + Math.cos(angle) * reach, y: source.y + Math.sin(angle) * reach };
   });
   return { points: [source, ...arc], closed: true };
+}
+
+export const startsOnFace = ({ style, onFace }: { style: StyleId; onFace?: boolean }) =>
+  style === "cube" && onFace === true;
+
+/**
+ * Cube collé au token, dans n'importe quelle direction : sa face touche le bord du token (vu comme un
+ * disque, pour que le cube tourne sans à-coup) et lui fait toujours face. `angle` est en radians.
+ */
+export function cubeOnFace(center: Point, pointer: Point, tokenWidth: number, side: number) {
+  const dx = pointer.x - center.x;
+  const dy = pointer.y - center.y;
+  const angle = dx === 0 && dy === 0 ? 0 : Math.atan2(dy, dx);
+  const distance = (tokenWidth + side) / 2;
+  return { angle, offset: { x: Math.cos(angle) * distance, y: Math.sin(angle) * distance } };
 }
 
 /** Lu dans les métadonnées de la salle : refusé tant que le MJ n'a rien autorisé. */
@@ -662,6 +696,7 @@ export function editSpell(spells: Favorite[], index: number, changes: Favorite):
           size,
           exact: STYLES[style].exactZone && isExact(exact) ? exact : null,
           ...(isDurable(changes) ? { durable: true } : {}),
+          ...(startsOnFace(changes) ? { onFace: true } : {}),
         }
       : spell,
   );
@@ -722,6 +757,9 @@ export interface DurableEntry {
   from?: Point;
   /** Token porteur : l'effet le suit. */
   carrier?: { id: string; name: string };
+  /** Décalage depuis le centre du porteur et rotation, pour un cube collé à sa face. */
+  offset?: Point;
+  angle?: number;
   gmOnly: boolean;
   owner: string;
 }
@@ -739,6 +777,8 @@ const isDurableEntry = (value: unknown): value is DurableEntry => {
     Number.isFinite(entry.seed) &&
     isPoint(entry.at) &&
     (entry.from === undefined || isPoint(entry.from)) &&
+    (entry.offset === undefined || isPoint(entry.offset)) &&
+    (entry.angle === undefined || Number.isFinite(entry.angle)) &&
     (entry.carrier === undefined ||
       (typeof entry.carrier.id === "string" && typeof entry.carrier.name === "string")) &&
     typeof entry.gmOnly === "boolean" &&
@@ -776,5 +816,5 @@ export function durableChanges(
 }
 
 /** La durée d'un sort lancé depuis la roue : on ne vise que s'il y a un point à choisir. */
-export const firesFromToken = (spell: { style: StyleId; durable?: boolean }) =>
-  castsOnSelf(spell.style) || (isDurable(spell) && !STYLES[spell.style].directed);
+export const firesFromToken = (spell: { style: StyleId; durable?: boolean; onFace?: boolean }) =>
+  !startsOnFace(spell) && (castsOnSelf(spell.style) || (isDurable(spell) && !STYLES[spell.style].directed));

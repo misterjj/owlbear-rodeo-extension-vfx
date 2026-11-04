@@ -57,6 +57,8 @@ input:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
 .exact input { width: 64px; margin-left: auto; }
 .option { display: flex; align-items: center; gap: 6px; min-height: 24px; font-size: 12px; cursor: pointer; }
 .durable { margin-top: 5px; }
+.origin { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-height: 24px; font-size: 12px; }
+.origin label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .running { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-size: 12px; }
 .running span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .running small { color: #a9adbd; }

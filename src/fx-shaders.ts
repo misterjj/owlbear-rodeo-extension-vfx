@@ -561,6 +561,115 @@ half4 main(float2 coord) {
 }
 `;
 
+export const METEOR_SKSL = `${COMMON}
+uniform vec3 smoke;
+uniform float radius;
+uniform float rough;
+
+half4 main(float2 coord) {
+  vec2 p = local(coord) / radius;
+  float d = length(p);
+  // La chute dure jusqu'à IMPACT, le reste du temps appartient à l'explosion et au cratère.
+  const float IMPACT = 0.3;
+
+  if (t < IMPACT) {
+    // La graine fait varier l'angle d'arrivée, de la même façon chez tous les joueurs.
+    float tilt = -1.0 + (hash(vec2(seed, 3.1)) - 0.5) * 1.6;
+    vec2 dir = normalize(vec2(tilt * 0.6, -1.0));
+    float fall = t / IMPACT;
+    vec2 head = dir * 3.6 * (1.0 - fall * fall);
+    vec2 v = p - head;
+    float along = dot(v, dir);
+    float across = dot(v, vec2(-dir.y, dir.x));
+
+    // Le météore grossit en approchant. Le cercle au sol annonce où il va tomber.
+    float size = 0.13 + fall * 0.17;
+    float ball = exp(-dot(v, v) / (size * size));
+    float len = 2.6;
+    float trail = 0.0;
+    if (along > 0.0 && along < len) {
+      float k = along / len;
+      float flame = fbm(vec2(along * 2.4 - t * 26.0 + seed, across / size * 0.7));
+      float halfWidth = size * (1.0 - k) * (0.5 + flame);
+      trail = smoothstep(1.0, 0.2, abs(across) / max(halfWidth, 0.001)) * (1.0 - k) * smoothstep(0.0, size, along);
+    }
+    float mark = exp(-pow((d - 1.0) / 0.03, 2.0)) * smoothstep(0.05, 0.6, fall) * (0.7 + 0.3 * sin(t * 90.0));
+    float shadow = (1.0 - smoothstep(0.1, 1.0, d)) * fall * fall * 0.5;
+
+    float heat = clamp(ball * 1.3 + trail * 0.85, 0.0, 1.0);
+    float alpha = clamp(smoothstep(0.03, 0.4, heat) + ball, 0.0, 1.0);
+    vec3 color = ramp(heat) * alpha;
+    float markAlpha = mark * (1.0 - alpha);
+    color += palette[1] * markAlpha;
+    alpha += markAlpha;
+    return half4(color, alpha + shadow * (1.0 - alpha));
+  }
+
+  if (d > 1.6) return half4(0.0);
+  float u = (t - IMPACT) / (1.0 - IMPACT);
+  float grow = 1.0 - pow(1.0 - clamp(u / 0.3, 0.0, 1.0), 3.0);
+  vec2 outward = p / max(d, 0.001);
+  float n = fbm(p * 3.0 * rough - outward * smoothstep(0.0, 0.45, d) * u * 1.6 + seed);
+
+  // Cratère noirci, parcouru de fissures brûlantes qui s'éteignent, et qui reste après la fumée.
+  float linger = 1.0 - smoothstep(0.72, 1.0, u);
+  float craterEdge = 0.62 + (fbm(p * 3.4 + seed) - 0.5) * 0.3;
+  float crater = (1.0 - smoothstep(craterEdge - 0.14, craterEdge, d)) * smoothstep(0.02, 0.1, u) * linger * 0.88;
+  float crack = abs(fbm(p * 5.0 + seed * 1.7) - 0.5);
+  float embers = (1.0 - smoothstep(0.0, 0.035, crack)) * (1.0 - smoothstep(0.35, 0.85, u)) * crater;
+  vec3 color = mix(smoke * 0.25, ramp(0.8), embers) * crater;
+  float alpha = crater;
+
+  // Colonne de fumée.
+  float smokeEdge = 1.0 - d / (0.5 + 0.6 * u) + (fbm(p * 2.4 + seed + u * 0.5) - 0.5) * 1.1;
+  float smokeAlpha = smoothstep(0.0, 0.45, smokeEdge) * smoothstep(0.14, 0.4, u) * (1.0 - smoothstep(0.55, 0.95, u)) * 0.75 * (1.0 - sonic);
+  color = smoke * smokeAlpha + color * (1.0 - smokeAlpha);
+  alpha = smokeAlpha + alpha * (1.0 - smokeAlpha);
+
+  // Boule de feu de l'impact.
+  float body = 1.0 - d / max(grow * 0.95, 0.001) + (n - 0.5) * 1.15;
+  float cooling = 1.0 - smoothstep(0.1, 0.6, u);
+  float bodyAlpha = smoothstep(0.0, 0.16, body) * (1.0 - smoothstep(0.32, 0.65, u)) * (1.0 - sonic);
+  color = ramp(clamp(body * 1.25 * (0.3 + cooling), 0.0, 1.0)) * bodyAlpha + color * (1.0 - bodyAlpha);
+  alpha = bodyAlpha + alpha * (1.0 - bodyAlpha);
+
+  // Débris projetés : des blocs sombres, bordés de la couleur de l'élément.
+  float rocks = 0.0;
+  float rims = 0.0;
+  for (int i = 0; i < 16; i++) {
+    float index = float(i) + seed;
+    float angle = hash(vec2(index, 1.7)) * 6.2832;
+    float reach = 0.55 + hash(vec2(index, 6.3)) * 0.85;
+    float size = 0.022 + hash(vec2(index, 8.9)) * 0.03;
+    vec2 rock = vec2(cos(angle), sin(angle)) * reach * (1.0 - pow(1.0 - clamp(u / 0.55, 0.0, 1.0), 2.5));
+    vec2 toRock = p - rock;
+    // Contour anguleux, qui tourne : un bloc de roche, pas une bille.
+    float facing = atan(toRock.y, toRock.x) + index * 5.0 + u * 9.0;
+    float facets = 1.0 + 0.16 * sin(facing * 5.0) + 0.12 * sin(facing * 2.0 + index);
+    float gap = length(toRock) / size * facets;
+    rocks = max(rocks, 1.0 - smoothstep(0.75, 1.0, gap));
+    rims = max(rims, exp(-gap * gap * 0.5));
+  }
+  float flying = smoothstep(0.0, 0.03, u) * (1.0 - smoothstep(0.62, 0.86, u));
+  float rimAlpha = rims * flying * 0.8 * (1.0 - rocks);
+  color = ramp(0.75) * rimAlpha + color * (1.0 - rimAlpha);
+  alpha = rimAlpha + alpha * (1.0 - rimAlpha);
+  float rockAlpha = rocks * flying;
+  color = smoke * 0.3 * rockAlpha + color * (1.0 - rockAlpha);
+  alpha = rockAlpha + alpha * (1.0 - rockAlpha);
+
+  // Onde de choc et éclair du choc.
+  float ringOffset = (d - grow * 1.3) / 0.05;
+  float ring = exp(-ringOffset * ringOffset) * (1.0 - smoothstep(0.08, 0.34, u));
+  float flash = exp(-d * d * 3.0) * (1.0 - smoothstep(0.0, 0.14, u));
+  float echoes = sonic * waves(d * 5.0, 6.0) * (1.0 - smoothstep(grow * 1.1, grow * 1.25, d)) * (1.0 - smoothstep(0.35, 0.95, u)) * 0.85;
+  float glow = clamp(ring + flash + echoes, 0.0, 1.0);
+  color = palette[2] * glow + color * (1.0 - glow);
+  alpha = glow + alpha * (1.0 - glow);
+  return half4(color, alpha);
+}
+`;
+
 export const HEAL_SKSL = `${COMMON}
 uniform float radius;
 
@@ -692,6 +801,7 @@ half4 main(float2 coord) {
 
 const cube = (timing: Timing) => `${common(timing, 3)}
 uniform float radius;
+uniform float angle;
 
 float line(float distance, float width) {
   float offset = distance / width;
@@ -700,7 +810,10 @@ float line(float distance, float width) {
 
 half4 main(float2 coord) {
   // radius est ici la moitié du côté : la zone couvre exactement ce carré.
-  vec2 p = local(coord) / radius;
+  vec2 turned = local(coord) / radius;
+  float c = cos(angle);
+  float s = sin(angle);
+  vec2 p = vec2(c * turned.x + s * turned.y, c * turned.y - s * turned.x);
   vec2 a = abs(p);
   if (max(a.x, a.y) > 1.15) return half4(0.0);
 

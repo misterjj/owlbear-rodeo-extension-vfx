@@ -15,6 +15,7 @@ import {
   durablesIn,
   exactZoneLabel,
   isDurable,
+  startsOnFace,
   loadChoice,
   loadFavorites,
   matchesFavorite,
@@ -27,6 +28,7 @@ import {
 } from "./fx";
 import { FX_PROGRAM_CHANNEL } from "./fx-programs";
 import { bindResize, fitCompactHeight, resizeButton, setupWindowDrag, windowPrefs } from "./window-drag";
+import { watchSceneUnit } from "./scene-unit";
 import "./panel.css";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -46,6 +48,9 @@ const escapeHtml = (text: string) =>
   text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
 function hint() {
+  if (startsOnFace(choice)) {
+    return `Clique sur le token, puis dans la direction où poser le cube${isDurable(choice) ? " (reclique sur le token pour l'éteindre)" : ""}. Sur la carte, il se centre sur le clic.${choice.gmOnly ? " Caché aux joueurs." : ""}`;
+  }
   if (isDurable(choice)) {
     const where =
       choice.style === "mur"
@@ -101,8 +106,19 @@ function exactRow() {
     <label class="exact">
       ${what} exact
       <input id="exact" type="number" min="0" step="any" value="${choice.exact ?? ""}" />
-      <span>${escapeHtml(unit)}</span>
+      <span data-unit>${escapeHtml(unit)}</span>
     </label>`;
+}
+
+function originRow() {
+  if (choice.style !== "cube") return "";
+  const face = choice.onFace === true;
+  return `
+    <div class="origin" role="radiogroup" aria-label="Origine sur un token">
+      <span>Sur un token :</span>
+      <label><input type="radio" name="origin" value="centre" ${face ? "" : "checked"} /> au centre</label>
+      <label><input type="radio" name="origin" value="face" ${face ? "checked" : ""} /> sur une face</label>
+    </div>`;
 }
 
 function durableRow() {
@@ -213,9 +229,9 @@ function bindTitleBar() {
 function bindFavoriteChoices() {
   app.querySelectorAll<HTMLButtonElement>("[data-favorite]").forEach((element) => {
     element.onclick = () => {
-      const { element: fxElement, style, size, exact, durable } =
+      const { element: fxElement, style, size, exact, durable, onFace } =
         favorites[Number(element.dataset.favorite)];
-      update({ element: fxElement, style, size, exact, durable: durable === true });
+      update({ element: fxElement, style, size, exact, durable: durable === true, onFace: onFace === true });
       render();
     };
   });
@@ -224,7 +240,7 @@ function bindFavoriteChoices() {
 /** L'essentiel pour jouer : ce qui partira au prochain clic, et de quoi changer d'effet ou en retirer un. */
 function renderCompact() {
   const { label, palette } = ELEMENTS[choice.element];
-  const measure = usesExact() ? `${choice.exact} ${escapeHtml(unit)}` : choice.size;
+  const measure = usesExact() ? `${choice.exact} <span data-unit>${escapeHtml(unit)}</span>` : choice.size;
   const extras = [isDurable(choice) ? "durable" : "", choice.gmOnly ? "MJ seul" : ""].filter(Boolean);
   const chips = favorites
     .map(
@@ -273,6 +289,7 @@ function render() {
         ${STYLE_IDS.map((id) => button("style", id, STYLES[id].label, STYLES[id].label)).join("")}
       </div>
       ${durableRow()}
+      ${originRow()}
     </section>
     <section>
       <h2>Taille</h2>
@@ -331,6 +348,12 @@ function render() {
         .sendMessage(FX_PROGRAM_CHANNEL, { type: "open-window" }, { destination: "LOCAL" })
         .catch(warn);
   }
+  app.querySelectorAll<HTMLInputElement>('input[name="origin"]').forEach((input) => {
+    input.onchange = () => {
+      update({ onFace: input.value === "face" });
+      render();
+    };
+  });
   const durable = app.querySelector<HTMLInputElement>("#durable");
   if (durable) {
     durable.onchange = () => {
@@ -367,10 +390,10 @@ OBR.onReady(async () => {
     await OBR.popover.close(FX_PANEL_ID);
     return;
   }
-  if (await OBR.scene.isReady()) {
-    unit = (await OBR.scene.grid.getScale()).parsed.unit || unit;
-    readRunning(await OBR.scene.getMetadata());
-  }
+  await watchSceneUnit((next) => {
+    unit = next;
+  });
+  if (await OBR.scene.isReady()) readRunning(await OBR.scene.getMetadata());
   OBR.scene.onMetadataChange(readRunning);
   document.documentElement.classList.toggle("compact", compact);
   render();

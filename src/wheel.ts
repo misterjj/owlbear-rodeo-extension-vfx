@@ -22,6 +22,8 @@ import {
   renameSpell,
   sameDurable,
   spellsOf,
+  startsOnFace,
+  unitLabel,
   wheelPositions,
   type DurableEntry,
   type ElementId,
@@ -110,6 +112,7 @@ function renderManage() {
     size: choice.size,
     exact: choice.exact,
     ...(isDurable(choice) ? { durable: true } : {}),
+    ...(startsOnFace(choice) ? { onFace: true } : {}),
   };
   const candidates = [current, ...loadFavorites(localStorage)];
   const full = spells.length >= MAX_SPELLS;
@@ -128,7 +131,7 @@ function renderManage() {
                   (spell, index) => `
                     <div class="row">
                       <input type="text" data-name="${index}" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(spell.name)}" aria-label="Nom du sort ${escapeHtml(spell.name)}" />
-                      <small>${STYLES[spell.style].label}${isDurable(spell) ? ", durable" : ""}</small>
+                      <small>${STYLES[spell.style].label}${isDurable(spell) ? ", durable" : ""}${startsOnFace(spell) ? ", face" : ""}</small>
                       <button type="button" data-edit="${index}" aria-label="Modifier ${escapeHtml(spell.name)}" title="Modifier">✎</button>
                       <button type="button" data-remove="${index}" aria-label="Retirer ${escapeHtml(spell.name)}" title="Retirer">✕</button>
                     </div>`,
@@ -228,6 +231,10 @@ function renderEdit(index: number) {
         <label>Style<select id="style">${options(STYLE_IDS, (id) => STYLES[id].label, spell.style)}</select></label>
         <label>Taille<select id="size">${options(SIZE_IDS, (id) => id, spell.size)}</select></label>
         <label id="exact-row"><span id="exact-label"></span><input type="number" id="exact" min="0" step="any" value="${spell.exact ?? ""}" /></label>
+        <label class="wide" id="origin-row">Origine sur le token<select id="origin">
+          <option value="centre"${spell.onFace ? "" : " selected"}>Au centre</option>
+          <option value="face"${spell.onFace ? " selected" : ""}>Sur une face (viser la direction)</option>
+        </select></label>
         <label class="wide check" id="durable-row"><input type="checkbox" id="durable"${spell.durable ? " checked" : ""} /> Durable</label>
         ${isLit(spell) ? `<p class="note wide">Déjà allumé : l'effet en cours ne change pas. Éteins-le, au besoin depuis le panneau, pour voir la nouvelle version.</p>` : ""}
         <p class="error wide" id="error" hidden></p>
@@ -247,6 +254,7 @@ function renderEdit(index: number) {
     field("exact-row").hidden = !STYLES[style].exactZone;
     field("exact-label").textContent = `${exactZoneLabel(style)} exact (${unit})`;
     field("durable-row").hidden = !canBeDurable(style);
+    field("origin-row").hidden = style !== "cube";
   };
   showFieldsOfStyle();
   styleField.onchange = showFieldsOfStyle;
@@ -268,6 +276,7 @@ function renderEdit(index: number) {
       size: field<HTMLSelectElement>("size").value as SizeId,
       exact: field<HTMLInputElement>("exact").valueAsNumber,
       durable: field<HTMLInputElement>("durable").checked,
+      onFace: field<HTMLSelectElement>("origin").value === "face",
     });
     const fail = (message: string) => {
       error.textContent = message;
@@ -293,7 +302,7 @@ OBR.onReady(async () => {
     await close();
     return;
   }
-  unit = (await OBR.scene.grid.getScale()).parsed.unit || unit;
+  unit = unitLabel((await OBR.scene.grid.getScale()).parsed);
   tokenName = item.name;
   spells = spellsOf(item.metadata);
   lit = durablesIn(await OBR.scene.getMetadata()).filter(({ carrier }) => carrier?.id === tokenId);
