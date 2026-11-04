@@ -10,6 +10,7 @@ import {
   MIN_INTERVAL,
   anchorsNeeded,
   groupNames,
+  moveAnchor,
   normalizeTiming,
   programProblem,
   programsIn,
@@ -260,6 +261,8 @@ function anchorsHtml() {
         <div class="anchor">
           <span class="rank">${index + 1}</span>
           <span>${token ? `Token ${escapeHtml(token.name)}` : `Carte (${Math.round(at.x)}, ${Math.round(at.y)})`}</span>
+          <button type="button" class="btn" data-move-anchor="${index}" data-delta="-1" ${index === 0 ? "disabled" : ""} aria-label="Monter le point ${index + 1}" title="Monter">▲</button>
+          <button type="button" class="btn" data-move-anchor="${index}" data-delta="1" ${index === anchors.length - 1 ? "disabled" : ""} aria-label="Descendre le point ${index + 1}" title="Descendre">▼</button>
           <button type="button" class="btn" data-remove-anchor="${index}" aria-label="Retirer le point ${index + 1}" title="Retirer">✕</button>
         </div>`,
     )
@@ -282,6 +285,18 @@ function bindAnchors() {
     post({ type: picking ? "pick-start" : "pick-stop" });
     refreshAnchors();
   };
+  app.querySelectorAll<HTMLButtonElement>("[data-move-anchor]").forEach((button) => {
+    button.onclick = () => {
+      const index = Number(button.dataset.moveAnchor);
+      const delta = Number(button.dataset.delta) as -1 | 1;
+      draft!.anchors = moveAnchor(draft!.anchors, index, delta);
+      post({ type: "draft", anchors: draft!.anchors });
+      refreshAnchors();
+      // Le clavier suit le point déplacé, s'il peut encore aller dans ce sens.
+      const next = app.querySelector<HTMLButtonElement>(`[data-move-anchor="${index + delta}"][data-delta="${delta}"]`);
+      (next && !next.disabled ? next : app.querySelector<HTMLButtonElement>("#pick"))?.focus();
+    };
+  });
   app.querySelectorAll<HTMLButtonElement>("[data-remove-anchor]").forEach((button) => {
     button.onclick = () => {
       const index = Number(button.dataset.removeAnchor);
@@ -440,6 +455,9 @@ export async function setupPrograms(container: HTMLElement) {
     if (message?.type === "picked" && picking && message.anchor && draft && draft.anchors.length < MAX_ANCHORS) {
       draft.anchors = [...draft.anchors, message.anchor];
       post({ type: "draft", anchors: draft.anchors });
+      // Le message « ajoute un point » n'a plus lieu d'être.
+      problem = "";
+      app.querySelector("#form .error")?.remove();
       refresh();
     } else if (message?.type === "pick-stopped") {
       picking = false;

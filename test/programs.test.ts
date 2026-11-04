@@ -19,6 +19,8 @@ import {
   withActive,
   withProgram,
   type Program,
+  anchorNumbers,
+  moveAnchor,
 } from "../src/fx-programs";
 
 const point = (x: number) => ({ at: { x, y: 0 } });
@@ -278,5 +280,29 @@ describe("gestion", () => {
   it("repère les points des programmes inactifs et du brouillon", () => {
     const draft = [point(9)];
     expect(markedAnchors([base, off], draft)).toEqual([...off.anchors, ...draft]);
+  });
+});
+
+describe("ordre des points", () => {
+  const [a, b, c] = [{ at: { x: 1, y: 1 } }, { at: { x: 2, y: 2 } }, { at: { x: 3, y: 3 } }];
+
+  it("échange un point avec son voisin", () => {
+    expect(moveAnchor([a, b, c], 1, -1)).toEqual([b, a, c]);
+    expect(moveAnchor([a, b, c], 1, 1)).toEqual([a, c, b]);
+  });
+
+  it("ne bouge rien au bord de la liste", () => {
+    const list = [a, b];
+    expect(moveAnchor(list, 0, -1)).toBe(list);
+    expect(moveAnchor(list, 1, 1)).toBe(list);
+  });
+
+  it("numérote chaque point, et regroupe un point utilisé plusieurs fois", () => {
+    expect(anchorNumbers([a, b, c]).map(({ text }) => text)).toEqual(["1", "2", "3"]);
+    expect(anchorNumbers([a, b, { ...a }]).map(({ text }) => text)).toEqual(["1, 3", "2"]);
+    const token = { at: { x: 9, y: 9 }, token: { id: "t", name: "T" } };
+    const moved = { at: { x: 5, y: 5 }, token: { id: "t", name: "T" } };
+    expect(anchorNumbers([token, a, moved]).map(({ text }) => text)).toEqual(["1, 3", "2"]);
+    expect(anchorNumbers([]).length).toBe(0);
   });
 });

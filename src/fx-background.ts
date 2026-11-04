@@ -1,6 +1,7 @@
 import OBR, {
   buildCurve,
   buildEffect,
+  buildLabel,
   buildShape,
   isCurve,
   isEffect,
@@ -57,6 +58,7 @@ import {
   type TokenArea,
 } from "./fx";
 import {
+  anchorNumbers,
   FX_PROGRAMS_KEY,
   FX_PROGRAM_CHANNEL,
   markedAnchors,
@@ -758,12 +760,40 @@ async function syncMarkers(itemIds: string[], dpi: number) {
     role === "GM"
       ? markedAnchors(programs, draftAnchors).filter(({ token }) => !token || present.has(token.id))
       : [];
-  const signature = JSON.stringify(anchors);
+  const numbers = role === "GM"
+    ? anchorNumbers(draftAnchors).filter(({ anchor: { token } }) => !token || present.has(token.id))
+    : [];
+  const signature = JSON.stringify([anchors, numbers]);
   if (signature === markerSignature) return;
   markerSignature = signature;
   const old = await OBR.scene.local.getItems((item) => item.id.startsWith(FX_MARKER_PREFIX));
   if (old.length) await OBR.scene.local.deleteItems(old.map(({ id }) => id));
   if (!anchors.length) return;
+  const labels = await Promise.all(
+    numbers.map(async ({ anchor: { at, token }, text }, index) => {
+      const center = token ? (await OBR.scene.items.getItemBounds([token.id])).center : at;
+      // Juste au-dessus du repère, pour lire l'ordre sans masquer le token.
+      const label = buildLabel()
+        .id(`${FX_MARKER_PREFIX}numero/${index}`)
+        .plainText(text)
+        .position({ x: center.x, y: center.y - dpi * 0.26 })
+        .fontSize(dpi * 0.2)
+        .fontWeight(700)
+        .fillColor("#ffffff")
+        .backgroundColor("#6d4bc4")
+        .backgroundOpacity(0.95)
+        .cornerRadius(dpi * 0.06)
+        .padding(dpi * 0.04)
+        .pointerWidth(0)
+        .pointerHeight(0)
+        .layer("POINTER")
+        .locked(true)
+        .disableHit(true);
+      if (token) label.attachedTo(token.id).disableAttachmentBehavior(["SCALE", "ROTATION", "LOCKED"]);
+      return label.build();
+    }),
+  );
+  if (labels.length) await OBR.scene.local.addItems(labels);
   await OBR.scene.local.addItems(
     await Promise.all(
       anchors.map(async ({ at, token }, index) => {

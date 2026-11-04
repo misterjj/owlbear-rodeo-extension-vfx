@@ -51,7 +51,7 @@ secondes, ou des éclairs entre deux poteaux à intervalle variable. L'onglet **
 
 - **Effet :** élément, style, taille ou zone exacte.
 - **Rythme :** intervalle minimum et maximum, décalage du premier tir, nombre de tirs (vide : sans fin).
-- **Points :** des positions sur la carte ou des tokens, placés d'un clic. Un effet dirigé va du premier
+- **Points :** des positions sur la carte ou des tokens, placés d'un clic. ▲ et ▼ changent leur ordre, et leur numéro s'affiche sur la carte pendant l'édition. Un effet dirigé va du premier
   au second ; avec plus de deux points, ou pour un effet de zone, le point est tiré au hasard. Une
   **chaîne** parcourt au contraire tous ses points dans l'ordre : c'est un seul tir, et l'intervalle
   compte à partir de sa fin. Un token caché ou supprimé est sauté.

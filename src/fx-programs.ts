@@ -236,3 +236,25 @@ export const markedAnchors = (programs: Program[], draft: Anchor[]) => [
   ...programs.filter(({ active }) => !active).flatMap(({ anchors }) => anchors),
   ...draft,
 ];
+
+/** Échange un point avec son voisin. Au bord de la liste, rien ne change. */
+export function moveAnchor(anchors: Anchor[], index: number, delta: -1 | 1): Anchor[] {
+  const other = index + delta;
+  if (!anchors[index] || !anchors[other]) return anchors;
+  const next = [...anchors];
+  [next[index], next[other]] = [next[other], next[index]];
+  return next;
+}
+
+/** Numéros à afficher sur la carte : un même point utilisé plusieurs fois les regroupe, « 1, 3 ». */
+export function anchorNumbers(anchors: Anchor[]) {
+  const labels: { anchor: Anchor; text: string }[] = [];
+  anchors.forEach((anchor, index) => {
+    const same = labels.find(({ anchor: other }) =>
+      anchor.token ? other.token?.id === anchor.token.id : !other.token && other.at.x === anchor.at.x && other.at.y === anchor.at.y,
+    );
+    if (same) same.text = `${same.text}, ${index + 1}`;
+    else labels.push({ anchor, text: String(index + 1) });
+  });
+  return labels;
+}
