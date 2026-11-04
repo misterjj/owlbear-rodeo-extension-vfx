@@ -30,6 +30,7 @@ import {
   defaultSpellName,
   cubeOnFace,
   appearAt,
+  castTiming,
   isSustained,
   durableChanges,
   dueDurables,
@@ -1098,7 +1099,7 @@ async function placeDurable(
     style: choice.style,
     scale,
     seed: randomSeed(),
-    ...(leavesTrace ? { restAt: Date.now() + restDelay(choice.style, scale, from ?? at, at, dpi) } : {}),
+    ...castTiming(choice.style, Date.now(), restDelay(choice.style, scale, from ?? at, at, dpi)),
     at,
     ...(from ? { from } : {}),
     ...(carrier ? { carrier: { id: carrier.id, name: carrier.name } } : {}),
@@ -1108,10 +1109,6 @@ async function placeDurable(
     owner: OBR.player.id,
   };
   await saveDurables([...entries, entry]);
-  // L'éclair et l'onde de choc du déclenchement : l'effet durable, lui, n'a ni début ni fin.
-  if (choice.style === "transformation") {
-    send(buildMessage(choice, carrier?.center ?? at, undefined, multiplier, entry.seed));
-  }
   // La flèche doit voler, les griffes griffer : seule leur trace est durable.
   if (leavesTrace) send(buildMessage(choice, carrier?.center ?? at, from, multiplier, entry.seed));
 }

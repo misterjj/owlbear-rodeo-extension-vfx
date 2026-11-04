@@ -13,6 +13,9 @@ import {
   DEFAULT_LIMIT,
   MAX_LIMIT,
   limitsIn,
+  castTiming,
+  LEAVES_TRACE,
+  type StyleId,
   othersLimit,
   parseLimit,
   roomSettingsWith,
@@ -683,6 +686,25 @@ describe("manifest", () => {
   it("respecte la limite de description d'Owlbear", () => {
     const manifest = JSON.parse(readFileSync("public/manifest.json", "utf8"));
     expect(manifest.description.length).toBeLessThanOrEqual(128);
+  });
+});
+
+describe("départ d'un effet durable lancé à la main", () => {
+  const styles = Object.keys(STYLES) as StyleId[];
+
+  it("fait apparaître chaque effet qui tient, depuis le début", () => {
+    for (const style of styles.filter(isSustained)) {
+      const { enterAt, restAt } = castTiming(style, 1000, 1500);
+      expect(enterAt).toBe(1000);
+      expect(restAt).toBeUndefined();
+      expect(appearAt(enterAt, 1000, 1500)).toBe(0);
+      expect(appearAt(enterAt, 2500, 1500)).toBe(0.5);
+    }
+  });
+
+  it("laisse une trace à la fin de l'animation, et la téléportation à sa boucle", () => {
+    for (const style of LEAVES_TRACE) expect(castTiming(style, 1000, 1500)).toEqual({ restAt: 2500 });
+    expect(castTiming("teleportation", 1000, 0)).toEqual({});
   });
 });
 

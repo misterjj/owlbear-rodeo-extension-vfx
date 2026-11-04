@@ -913,6 +913,12 @@ export const LEAVES_TRACE: readonly StyleId[] = ["fleche", "projectile", "coup",
 /** Un effet qui tient, par opposition à une trace ou à la boucle de la téléportation. */
 export const isSustained = (style: StyleId) => style !== "teleportation" && !LEAVES_TRACE.includes(style);
 
+/** Départ d'un effet durable lancé maintenant : une trace attend la fin de l'animation, un effet qui tient apparaît. */
+export function castTiming(style: StyleId, now: number, delay: number): { restAt?: number; enterAt?: number } {
+  if (LEAVES_TRACE.includes(style)) return { restAt: now + delay };
+  return isSustained(style) ? { enterAt: now } : {};
+}
+
 /** Où en est l'apparition d'un effet qui tient : de 0 au milieu de sa vie, 0,5, où il reste. */
 export function appearAt(enterAt: number | undefined, now: number, delay: number) {
   if (enterAt === undefined || delay <= 0) return 0.5;
