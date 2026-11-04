@@ -18,7 +18,6 @@ const PLUGIN_ID = "vfx-owlbear";
 export const FX_PROGRAMS_KEY = `${PLUGIN_ID}/programmes`;
 /** Échanges entre la fenêtre des programmes et l'arrière-plan, chez le MJ seulement. */
 export const FX_PROGRAM_CHANNEL = `${PLUGIN_ID}/programme`;
-export const FX_PROGRAMS_WINDOW_ID = `${PLUGIN_ID}/fenetre-programmes`;
 
 export const MAX_PROGRAMS = 8;
 export const MAX_ANCHORS = 8;

@@ -5,8 +5,9 @@ Ils sont calculés par la carte graphique : il n'y a aucune image à fournir.
 
 ## Utilisation
 
-Prends l'outil **Effets** dans la barre d'outils : un panneau s'ouvre pour choisir trois réglages.
-Le dernier choix est conservé.
+Clique sur **Effets**, dans le menu en haut à gauche d'Owlbear. La fenêtre a trois onglets : **Lancer**,
+**Programmes** et **Réglages** (les deux derniers pour le MJ). L'onglet **Lancer** prend la main sur la
+carte dès qu'on y arrive : choisis l'élément, le style et la taille, puis clique sur la carte. Le dernier choix est conservé. Élément et style s'ouvrent d'un clic, un à la fois ; le reste (zone exacte, durable, roue, effets durables) est replié avec son résumé.
 
 - **Élément :** feu, glace, foudre, poison, acide, ténèbres, lumière, force, nécrotique, psychique,
   tonnerre, physique, sang, eau, terre, vent ;
@@ -18,9 +19,9 @@ Le dernier choix est conservé.
 - **Taille :** XS, S, M, L ou XL. Pour un sort de zone (explosion, météore, pluie, dôme, cube, nuage, aura, transformation, soin,
   cône), un rayon, une longueur ou un côté exact se donne dans l'unité de la scène.
 
-Glisse la barre de titre du panneau pour le déplacer. Le bouton **–** le réduit à l'essentiel : l'effet
-en cours, les favoris pour en changer et les effets durables. La place et le format sont conservés, et
-la fenêtre des programmes fonctionne de la même façon.
+Le bouton **–** réduit la fenêtre à l'essentiel : l'effet en cours, les favoris pour en changer et les
+effets durables ; l'onglet Programmes se limite à une liste qui active ou désactive. Si tu prends un autre
+outil, un message le signale et **Reprendre** rend la main à l'onglet. Fermer la fenêtre rend l'outil d'avant.
 
 Un cube lancé depuis un token peut être **au centre** ou **sur une face**, comme pour *Vague tonnante* :
 sur une face, un second clic choisit la direction, n'importe où autour du token : le cube se colle à lui
@@ -45,10 +46,8 @@ pas à l'écran. Ces effets ne connaissent pas les murs et ne changent rien aux 
 ## Programmes
 
 Un programme relance un effet tout seul, tant qu'il est actif : un canon qui tire toutes les 3
-secondes, ou des éclairs entre deux poteaux à intervalle variable. Le bouton **Programmes** de l'outil,
-ou celui du panneau, ouvre leur liste (8 au plus par scène). Le bouton reste disponible pour le MJ quel
-que soit l'outil en main, et la fenêtre reste ouverte quand tu changes d'outil. Réduite, elle se limite
-à une liste qui active ou désactive programmes et groupes.
+secondes, ou des éclairs entre deux poteaux à intervalle variable. L'onglet **Programmes** les liste
+(8 au plus par scène). Chaque ligne se lance ou s'arrête avec ▶ et ■, et un groupe entier avec **▶ Tout** et **■ Tout**.
 
 - **Effet :** élément, style, taille ou zone exacte.
 - **Rythme :** intervalle minimum et maximum, décalage du premier tir, nombre de tirs (vide : sans fin).
@@ -65,17 +64,18 @@ la main restent prioritaires.
 
 ## Sorts d'un token
 
-Chaque token peut garder jusqu'à 8 sorts, présentés sur une roue autour de lui. Pour l'ouvrir, clique
-sur le token avec le mode **Roue des sorts** de l'outil, ou choisis **Sorts** dans son menu. Le bouton
-⚙ au centre gère la liste : tu y ajoutes le réglage en cours sous le nom de ton choix ou un favori,
-et tu renommes les sorts directement dans leur champ. Le crayon ✎ modifie un sort : élément, style,
-taille, zone exacte et durée. Un effet durable déjà allumé ne change pas tant qu'il n'est pas éteint.
+Chaque token peut garder jusqu'à 8 sorts, présentés sur une roue autour de lui.
 
-Aura, transformation, soin, dôme et les sorts durables autres que le mur partent aussitôt du token. Les autres attendent un clic pour viser, puis tu
-retrouves l'outil que tu avais (`Échap` pour annuler). Les sorts sont enregistrés sur le token : ils
-le suivent et servent à tous ceux qui ont la main dessus.
+**Pendant la partie :** clique sur le token avec l'outil de sélection, puis sur **Sorts** dans son menu. Un
+clic sur un sort le lance. Aura, transformation, soin, dôme et les sorts durables autres que le mur partent
+aussitôt du token ; les autres attendent un clic pour viser, puis tu retrouves ton outil (`Échap` pour annuler).
 
-## Options du MJ
+**Pour la préparer :** sélectionne le token, ou utilise **Choisir un token sur la carte**, dans l'onglet
+**Lancer**. La section **Roue de…** liste ses sorts, que tu modifies avec ✎ ou retires avec ✕. **+ Ajouter à la
+roue** y met l'effet réglé juste au-dessus. Les sorts sont enregistrés sur le token : ils le suivent et servent
+à tous ceux qui ont la main dessus.
+
+## Réglages du MJ
 
 - **Visible par le MJ seulement :** les joueurs ne voient rien et une téléportation ne bouge pas le token ;
 - **Les joueurs peuvent lancer des effets :** l'outil apparaît chez eux, pour toute la salle. Ils ne
@@ -84,7 +84,6 @@ le suivent et servent à tous ceux qui ont la main dessus.
 Une téléportation qui part d'un token le déplace, calé sur la grille. Partie d'un autre point
 de la carte, elle reste purement visuelle.
 
-Si le panneau a été fermé, le bouton **Réglages** de l'outil le rouvre.
 Un clic sur un token vise son centre. Les joueurs n'ont rien à installer, et un effet
 reste caché sous le brouillard de guerre.
 

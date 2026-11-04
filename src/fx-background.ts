@@ -14,10 +14,10 @@ import {
   FX_CHANNEL,
   FX_DURABLE_ITEM_PREFIX,
   FX_DURABLE_KEY,
-  FX_PANEL_ID,
   FX_PREVIEW_ID,
   FX_SOURCE_ID,
   FX_TOOL_ID,
+  FX_UI_CHANNEL,
   FX_WHEEL_CHANNEL,
   FX_WHEEL_ID,
   MAX_DURABLE,
@@ -58,7 +58,6 @@ import {
 } from "./fx";
 import {
   FX_PROGRAMS_KEY,
-  FX_PROGRAMS_WINDOW_ID,
   FX_PROGRAM_CHANNEL,
   markedAnchors,
   nextShot,
@@ -74,7 +73,6 @@ import {
   type Program,
   type Shot,
 } from "./fx-programs";
-import { openWindow, setupWindowHost } from "./window-host";
 import {
   ARROW_SKSL,
   AURA_SKSL,
@@ -96,10 +94,7 @@ import {
   WALL_SKSL,
 } from "./fx-shaders";
 
-const PANEL_HEIGHT_GM = 890;
-const PANEL_HEIGHT_PLAYER = 784;
-const PROGRAMS_HEIGHT = 620;
-const WHEEL_SIZE = 340;
+const WHEEL_SIZE = 380;
 const FRAME_MS = 33;
 /** Au-delà, un nouvel effet est ignoré pour ne pas ralentir les petites machines. */
 const MAX_ACTIVE = 6;
@@ -796,11 +791,7 @@ async function syncMarkers(itemIds: string[], dpi: number) {
   );
 }
 
-async function openProgramsWindow() {
-  if (role === "GM") await openWindow("programs");
-}
-
-/** Clics sur la carte demandés par la fenêtre des programmes, et outil à retrouver ensuite. */
+/** Clics sur la carte demandés par le menu (points d'un programme, token à configurer), et outil à retrouver ensuite. */
 let picking: { tool: string; mode: string | undefined } | undefined;
 
 const postToWindow = (data: unknown) =>
@@ -825,8 +816,7 @@ async function stopPicking() {
 
 function handleProgramMessage(data: unknown) {
   const message = data as { type?: string; anchors?: Anchor[] } | null;
-  if (message?.type === "open-window") openProgramsWindow().catch(warn);
-  else if (message?.type === "pick-start") startPicking().catch(warn);
+  if (message?.type === "pick-start") startPicking().catch(warn);
   else if (message?.type === "pick-stop") stopPicking().catch(warn);
   else if (message?.type === "draft") {
     draftAnchors = Array.isArray(message.anchors) ? message.anchors : [];
@@ -1168,21 +1158,43 @@ async function handleClick(event: ToolEvent) {
   await updatePreview(event);
 }
 
-async function openPanel() {
-  if (role === "GM" || playersAllowed) await openWindow("panel");
+const MODE_ID = `${FX_TOOL_ID}/lancer`;
+const MENU_ID = `${FX_TOOL_ID}/menu-sorts`;
+
+/** Outil en main quand l'onglet Lancer a pris le relais, à rendre en le quittant. */
+let armedFrom: { tool: string; mode: string | undefined } | undefined;
+
+/** L'onglet Lancer capte les clics sur la carte dès qu'il est affiché. */
+async function arm() {
+  if (picking || !(role === "GM" || playersAllowed)) return;
+  await toolSync;
+  const [tool, mode] = await Promise.all([OBR.tool.getActiveTool(), OBR.tool.getActiveToolMode()]);
+  if (tool === FX_TOOL_ID) return;
+  armedFrom = { tool, mode };
+  await OBR.tool.activateTool(FX_TOOL_ID);
+  await OBR.tool.activateMode(FX_TOOL_ID, MODE_ID);
 }
 
-const MODE_ID = `${FX_TOOL_ID}/lancer`;
-const WHEEL_MODE_ID = `${FX_TOOL_ID}/roue`;
-const ACTION_ID = `${FX_TOOL_ID}/reglages`;
-const MENU_ID = `${FX_TOOL_ID}/menu-sorts`;
-const PROGRAMS_ACTION_ID = `${FX_TOOL_ID}/programmes`;
+async function disarm() {
+  if (!armedFrom) return;
+  const { tool, mode } = armedFrom;
+  armedFrom = undefined;
+  // Une visée lancée depuis une roue rendra le même outil à sa fin.
+  if (aiming) {
+    aiming = { ...aiming, tool, mode };
+    return;
+  }
+  if ((await OBR.tool.getActiveTool()) !== FX_TOOL_ID) return;
+  await OBR.tool.activateTool(tool);
+  if (mode) await OBR.tool.activateMode(tool, mode);
+}
 
 async function createTool() {
   const whenActive = { activeTools: [FX_TOOL_ID] };
+  // L'outil ne se montre que pendant qu'il sert : on y entre par le menu Effets, en haut à gauche.
   await OBR.tool.create({
     id: FX_TOOL_ID,
-    icons: [{ icon: "/vfx/outil.svg", label: "Effets" }],
+    icons: [{ icon: "/vfx/outil.svg", label: "Effets", filter: whenActive }],
     defaultMode: MODE_ID,
   });
   await OBR.tool.createMode({
@@ -1203,8 +1215,6 @@ async function createTool() {
     },
     onActivate() {
       toolActive = true;
-      // Pendant une visée, le panneau ne ferait que masquer la carte.
-      if (!aiming && !picking) openPanel().catch(warn);
     },
     onDeactivate() {
       toolActive = false;
@@ -1214,32 +1224,6 @@ async function createTool() {
         postToWindow({ type: "pick-stopped" });
       }
       clearSource();
-      OBR.popover.close(FX_PANEL_ID).catch(warn);
-    },
-  });
-  await OBR.tool.createMode({
-    id: WHEEL_MODE_ID,
-    icons: [{ icon: "/vfx/roue.svg", label: "Roue des sorts des tokens", filter: whenActive }],
-    cursors: [{ cursor: "pointer" }],
-    onToolClick(_context, event) {
-      tokenUnderPointer(event)
-        .then((token) => (token ? openWheel(token.id) : undefined))
-        .catch(warn);
-      return false;
-    },
-  });
-  await OBR.tool.createAction({
-    id: PROGRAMS_ACTION_ID,
-    icons: [
-      {
-        icon: "/vfx/programmes.svg",
-        label: "Programmes d'effets",
-        // Sans outil imposé : la fenêtre doit pouvoir s'ouvrir pendant le reste de la partie.
-        filter: { roles: ["GM"] },
-      },
-    ],
-    onClick() {
-      openProgramsWindow().catch(warn);
     },
   });
   await OBR.contextMenu.create({
@@ -1250,22 +1234,21 @@ async function createTool() {
         label: "Sorts",
         filter: {
           max: 1,
-          some: [
-            { key: "layer", value: "CHARACTER" },
+          // Les filtres d'une liste s'additionnent : sans « || », aucun objet ne serait sur les deux calques.
+          every: [
+            { key: "layer", value: "CHARACTER", coordinator: "||" },
             { key: "layer", value: "MOUNT" },
           ],
         },
       },
     ],
     onClick({ items }) {
-      if (items[0]) openWheel(items[0].id).catch(warn);
-    },
-  });
-  await OBR.tool.createAction({
-    id: ACTION_ID,
-    icons: [{ icon: "/vfx/reglages.svg", label: "Réglages des effets", filter: whenActive }],
-    onClick() {
-      openPanel().catch(warn);
+      if (!items[0]) return;
+      // Le menu d'Owlbear reste ouvert tant que le token est sélectionné, et recouvrirait la roue.
+      OBR.player
+        .deselect()
+        .then(() => openWheel(items[0].id))
+        .catch(warn);
     },
   });
 }
@@ -1273,13 +1256,10 @@ async function createTool() {
 async function removeTool() {
   toolActive = false;
   await clearSource();
-  await OBR.popover.close(FX_PANEL_ID).catch(warn);
+  armedFrom = undefined;
   await OBR.popover.close(FX_WHEEL_ID).catch(warn);
   await endAiming().catch(warn);
   await OBR.contextMenu.remove(MENU_ID);
-  await OBR.tool.removeAction(PROGRAMS_ACTION_ID);
-  await OBR.tool.removeAction(ACTION_ID);
-  await OBR.tool.removeMode(WHEEL_MODE_ID);
   await OBR.tool.removeMode(MODE_ID);
   await OBR.tool.remove(FX_TOOL_ID);
 }
@@ -1319,13 +1299,17 @@ async function castLimit(connectionId: string) {
 }
 
 export async function setupFx() {
-  setupWindowHost({
-    fullHeight: (kind) =>
-      kind === "programs" ? PROGRAMS_HEIGHT : role === "GM" ? PANEL_HEIGHT_GM : PANEL_HEIGHT_PLAYER,
-    canShow: async (kind) =>
-      kind === "programs"
-        ? role === "GM"
-        : (role === "GM" || playersAllowed) && (await OBR.tool.getActiveTool()) === FX_TOOL_ID,
+  OBR.broadcast.onMessage(FX_UI_CHANNEL, ({ data }) => {
+    const type = (data as { type?: string } | null)?.type;
+    if (type === "arm") arm().catch(warn);
+    else if (type === "disarm") disarm().catch(warn);
+  });
+  // Le menu refermé, la carte reprend son outil et les repères d'un programme en cours disparaissent.
+  OBR.action.onOpenChange((open) => {
+    if (open) return;
+    draftAnchors = [];
+    scheduleReconcile();
+    stopPicking().then(disarm).catch(warn);
   });
   OBR.broadcast.onMessage(FX_CHANNEL, ({ data, connectionId }) => {
     const message = parseFxMessage(data);
@@ -1356,7 +1340,6 @@ export async function setupFx() {
   OBR.player.onChange((player) => {
     if (player.role === role) return;
     role = player.role;
-    if (role !== "GM") OBR.popover.close(FX_PROGRAMS_WINDOW_ID).catch(warn);
     tokenAreas = undefined;
     syncTool();
     scheduleReconcile();

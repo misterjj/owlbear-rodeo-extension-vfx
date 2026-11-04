@@ -26,7 +26,10 @@ import {
   renameSpell,
   spellsOf,
   unitLabel,
-  wheelPositions,
+  STYLE_GROUPS,
+  fitWheelLabel,
+  readableColor,
+  wheelSector,
   type DurableEntry,
   type Favorite,
   addFavorite,
@@ -51,6 +54,7 @@ import {
   tokenAt,
   exactZoneLabel,
 } from "../src/fx";
+import { STYLE_ICONS } from "../src/fx-icons";
 import * as shaders from "../src/fx-shaders";
 
 const at = { x: 1, y: 2 };
@@ -462,19 +466,53 @@ describe("sorts d'un token", () => {
     expect(parseWheelCast(null)).toBeUndefined();
   });
 
-  it("répartit les sorts en cercle en partant du haut", () => {
-    const [top, right, bottom, left] = wheelPositions(4, 10);
-    expect(top.y).toBeCloseTo(-10);
-    expect(right.x).toBeCloseTo(10);
-    expect(bottom.y).toBeCloseTo(10);
-    expect(left.x).toBeCloseTo(-10);
+  it("découpe la roue en secteurs, le premier en haut", () => {
+    const [top, right, bottom, left] = [0, 1, 2, 3].map((i) => wheelSector(i, 4).middle);
+    expect(top.y).toBeLessThan(0);
+    expect(top.x).toBeCloseTo(0);
+    expect(right.x).toBeGreaterThan(0);
+    expect(bottom.y).toBeGreaterThan(0);
+    expect(left.x).toBeLessThan(0);
   });
 
-  it("garde les boutons de la roue dans la fenêtre sans qu'ils se chevauchent", () => {
-    const [size, button, radius] = [340, 78, (37 / 100) * 340];
-    expect(radius + button / 2).toBeLessThanOrEqual(size / 2);
-    const [a, b] = wheelPositions(MAX_SPELLS, radius);
-    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(button);
+  it("garde la forme d'un secteur avec un seul sort", () => {
+    const { path, middle } = wheelSector(0, 1);
+    expect(path).toContain(" 0 0 1 ");
+    expect(middle.x).toBeCloseTo(0);
+    expect(middle.y).toBeLessThan(0);
+    expect(path).not.toContain("NaN");
+  });
+
+  it("garde le nom à sa taille tant qu'il tient, sinon le réduit", () => {
+    expect(fitWheelLabel("Rage", 100)).toEqual({ size: 12.5, lines: ["Rage"] });
+    expect(fitWheelLabel("Vague tonnante", 100).lines).toEqual(["Vague tonnante"]);
+    const long = fitWheelLabel("Représailles infernales", 80);
+    expect(long.size).toBeLessThan(12.5);
+    expect(long.lines).toEqual(["Représailles", "infernales"]);
+    expect(long.lines.join(" ")).toBe("Représailles infernales");
+  });
+
+  it("coupe seulement un nom impossible à faire tenir", () => {
+    const { size, lines } = fitWheelLabel("x".repeat(30), 60);
+    expect(size).toBe(8.5);
+    expect(lines).toHaveLength(2);
+    expect(lines[1].endsWith("…")).toBe(true);
+    const words = fitWheelLabel("un deux trois quatre cinq six sept huit neuf dix onze", 60);
+    expect(words.lines).toHaveLength(2);
+    expect(words.lines[1].endsWith("…")).toBe(true);
+  });
+
+  it("éclaircit seulement les couleurs trop sombres", () => {
+    expect(readableColor([1, 1, 0.9])).toEqual([1, 1, 0.9]);
+    const [r, g, b] = readableColor([0.2, 0, 0.3]);
+    expect(0.3 * r + 0.59 * g + 0.11 * b).toBeCloseTo(0.45, 1);
+    expect(r).toBeGreaterThan(g);
+  });
+
+  it("classe chaque style dans un seul groupe, avec une icône", () => {
+    const grouped = STYLE_GROUPS.flatMap(({ styles }) => styles);
+    expect([...grouped].sort()).toEqual([...STYLE_IDS].sort());
+    for (const style of STYLE_IDS) expect(STYLE_ICONS[style]).toContain("<");
   });
 });
 

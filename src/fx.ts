@@ -3,7 +3,10 @@ const PLUGIN_ID = "vfx-owlbear";
 export const FX_CHANNEL = `${PLUGIN_ID}/effets`;
 export const FX_TOOL_ID = `${PLUGIN_ID}/outil`;
 export const FX_SOURCE_ID = `${PLUGIN_ID}/lanceur`;
-export const FX_PANEL_ID = `${PLUGIN_ID}/panneau`;
+/** Échanges entre le menu Effets et l'arrière-plan, sur le même écran. */
+export const FX_UI_CHANNEL = `${PLUGIN_ID}/interface`;
+/** Token à configurer quand le menu Effets s'ouvre depuis une roue vide. */
+export const FX_TARGET_KEY = "vfx:cible";
 export const FX_PREVIEW_ID = `${PLUGIN_ID}/apercu`;
 export const FX_WHEEL_ID = `${PLUGIN_ID}/roue`;
 /** Sort choisi dans la roue, transmis à l'arrière-plan de l'extension. */
@@ -721,13 +724,84 @@ export function parseWheelCast(data: unknown): WheelCast | undefined {
     : undefined;
 }
 
-/** Places sur la roue, en partant du haut, en décalage depuis son centre. */
-export function wheelPositions(count: number, radius: number): Point[] {
-  return Array.from({ length: count }, (_, i) => {
-    const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
-    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+export const WHEEL_OUTER = 150;
+export const WHEEL_INNER = 62;
+const WHEEL_GAP = 0.03;
+
+/**
+ * Secteur d'un sort sur la roue, le premier centré en haut, en décalage depuis le centre.
+ * `middle` est le milieu du secteur, là où se placent son icône et son nom.
+ */
+export function wheelSector(index: number, count: number) {
+  // Un sort seul garde la forme d'un secteur : un anneau entier ne se lirait pas comme un bouton.
+  const span = (Math.PI * 2) / Math.max(count, count === 1 ? 3 : 2);
+  const start = -Math.PI / 2 - span / 2 + index * span + WHEEL_GAP;
+  const end = start + span - WHEEL_GAP * 2;
+  const at = (radius: number, angle: number): Point => ({
+    x: Math.round(Math.cos(angle) * radius * 100) / 100,
+    y: Math.round(Math.sin(angle) * radius * 100) / 100,
   });
+  const large = end - start > Math.PI ? 1 : 0;
+  const [a, b, c, d] = [at(WHEEL_OUTER, start), at(WHEEL_OUTER, end), at(WHEEL_INNER, end), at(WHEEL_INNER, start)];
+  const middleRadius = (WHEEL_OUTER + WHEEL_INNER) / 2;
+  return {
+    path: `M${a.x} ${a.y}A${WHEEL_OUTER} ${WHEEL_OUTER} 0 ${large} 1 ${b.x} ${b.y}L${c.x} ${c.y}A${WHEEL_INNER} ${WHEEL_INNER} 0 ${large} 0 ${d.x} ${d.y}Z`,
+    middle: at(middleRadius, (start + end) / 2),
+    /** Largeur disponible pour le nom, au milieu du secteur. */
+    width: Math.min(span * middleRadius - 10, 104),
+  };
 }
+
+const LABEL_SIZES = [12.5, 11.5, 10.5, 9.5, 8.5];
+/** Largeur moyenne d'un caractère, rapportée à sa hauteur. */
+const CHAR_WIDTH = 0.54;
+const LABEL_LINES = 2;
+
+function wrapLabel(name: string, perLine: number) {
+  const lines: string[] = [];
+  for (const word of name.split(/\s+/)) {
+    const last = lines[lines.length - 1];
+    if (last !== undefined && `${last} ${word}`.length <= perLine) lines[lines.length - 1] = `${last} ${word}`;
+    else lines.push(word);
+  }
+  return lines;
+}
+
+/**
+ * Nom d'un sort sur la roue : sur une ou deux lignes, à la plus grande taille qui tient.
+ * Seul un nom vraiment trop long est coupé.
+ */
+export function fitWheelLabel(name: string, width: number) {
+  for (const size of LABEL_SIZES) {
+    const perLine = Math.floor(width / (size * CHAR_WIDTH));
+    const lines = wrapLabel(name, perLine);
+    if (lines.length <= LABEL_LINES && lines.every((line) => line.length <= perLine)) return { size, lines };
+  }
+  const size = LABEL_SIZES[LABEL_SIZES.length - 1];
+  const perLine = Math.floor(width / (size * CHAR_WIDTH));
+  const lines = wrapLabel(name, perLine).flatMap(
+    (line) => line.match(new RegExp(`.{1,${perLine}}`, "gu")) ?? [],
+  );
+  if (lines.length <= LABEL_LINES) return { size, lines };
+  const kept = lines.slice(0, LABEL_LINES);
+  kept[LABEL_LINES - 1] = `${kept[LABEL_LINES - 1].slice(0, perLine - 1).trimEnd()}…`;
+  return { size, lines: kept };
+}
+
+/** Une couleur d'élément trop sombre se perdrait sur le fond de la roue : elle est éclaircie. */
+export function readableColor([r, g, b]: Rgb): Rgb {
+  const light = 0.3 * r + 0.59 * g + 0.11 * b;
+  const add = light >= 0.45 ? 0 : (0.45 - light) / (1 - light);
+  return [r + (1 - r) * add, g + (1 - g) * add, b + (1 - b) * add];
+}
+
+/** Regroupement des styles dans l'onglet Lancer. */
+export const STYLE_GROUPS: { label: string; styles: StyleId[] }[] = [
+  { label: "Corps à corps", styles: ["coup", "griffes", "morsure"] },
+  { label: "À distance", styles: ["fleche", "projectile", "rayon", "chaine"] },
+  { label: "Zones", styles: ["explosion", "meteore", "cone", "mur", "dome", "cube", "pluie", "nuage"] },
+  { label: "Sur soi", styles: ["aura", "transformation", "soin", "teleportation"] },
+];
 
 const DURABLE_STYLES: readonly StyleId[] = ["aura", "pluie", "dome", "cube", "mur", "nuage", "transformation"];
 

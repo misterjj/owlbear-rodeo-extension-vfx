@@ -20,7 +20,6 @@ import {
   withProgram,
   type Program,
 } from "../src/fx-programs";
-import { parseWindowPrefs, placeWindow } from "../src/fx-window";
 
 const point = (x: number) => ({ at: { x, y: 0 } });
 const base: Program = {
@@ -279,38 +278,5 @@ describe("gestion", () => {
   it("repère les points des programmes inactifs et du brouillon", () => {
     const draft = [point(9)];
     expect(markedAnchors([base, off], draft)).toEqual([...off.anchors, ...draft]);
-  });
-});
-
-describe("placement d'une fenêtre", () => {
-  const screen = { width: 1200, height: 800 };
-  const size = { width: 380, height: 620 };
-  const fallback = { left: 72, top: 72, compact: false };
-
-  it("reprend sa place d'origine si la valeur enregistrée est illisible", () => {
-    for (const raw of [null, "", "{", '{"left":"a","top":1}', "null"]) {
-      expect(parseWindowPrefs(raw, fallback)).toEqual(fallback);
-    }
-    expect(parseWindowPrefs('{"left":10,"top":20,"compact":true}', fallback)).toEqual({ left: 10, top: 20, compact: true });
-  });
-
-  it("reste entière dans l'écran", () => {
-    expect(placeWindow({ left: 5000, top: 5000, compact: false }, screen, size)).toEqual({
-      width: 380,
-      height: 620,
-      left: 812,
-      top: 172,
-    });
-    expect(placeWindow({ left: -50, top: -50, compact: false }, screen, size)).toMatchObject({ left: 8, top: 8 });
-  });
-
-  it("se place selon sa hauteur réelle", () => {
-    const low = { left: 100, top: 790, compact: true };
-    expect(placeWindow(low, screen, { width: 250, height: 140 })).toMatchObject({ height: 140, top: 652 });
-    expect(placeWindow(low, screen, { width: 250, height: 300 })).toMatchObject({ height: 300, top: 492 });
-  });
-
-  it("garde le haut d'Owlbear visible sur un petit écran", () => {
-    expect(placeWindow({ left: 0, top: 0, compact: false }, { width: 1200, height: 500 }, size).height).toBe(412);
   });
 });
