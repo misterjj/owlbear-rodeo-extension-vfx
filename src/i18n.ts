@@ -1,6 +1,6 @@
 /** Textes de l'interface. Pour ajouter une langue : un dictionnaire de plus, complet grâce au type. */
 const fr = {
-  "app.title": "Effets",
+  "app.title": "Spellcast FX",
   "tab.cast": "Lancer",
   "tab.programs": "Programmes",
   "tab.settings": "Réglages",
@@ -233,7 +233,7 @@ const fr = {
 export type TextKey = keyof typeof fr;
 
 const en: Record<TextKey, string> = {
-  "app.title": "Effects",
+  "app.title": "Spellcast FX",
   "tab.cast": "Cast",
   "tab.programs": "Programs",
   "tab.settings": "Settings",

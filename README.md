@@ -1,11 +1,11 @@
-# Visual Effects for Owlbear Rodeo
+# Spellcast FX for Owlbear Rodeo
 
 The GM, and players if the GM allows it, cast animated effects on the map, visible to the whole room.
 They are computed by the graphics card, so there are no images to provide.
 
 ## Usage
 
-Click **Effects** in Owlbear's top-left menu. The window has three tabs: **Cast**, **Programs** and
+Click **Spellcast FX** in Owlbear's top-left menu. The window has three tabs: **Cast**, **Programs** and
 **Settings**. Programs is for the GM only, and players only see the language in Settings.
 
 The **Cast** tab takes over the map as soon as you open it: choose the element, style and size, then click
