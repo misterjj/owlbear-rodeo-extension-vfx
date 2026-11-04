@@ -265,7 +265,8 @@ async function stopDurables(ids: string[]) {
 
 /** La liste change sans redessiner le reste du panneau, où un champ peut être en cours de saisie. */
 function renderRunning() {
-  const container = app.querySelector<HTMLDivElement>("#running");
+  // Les réglages de la salle sont lus avant que le panneau soit dessiné.
+  const container = app?.querySelector<HTMLDivElement>("#running");
   if (!container) return;
   container.innerHTML = runningList();
   bindFolds(container);
