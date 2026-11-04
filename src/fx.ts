@@ -804,6 +804,8 @@ export const MAX_LIMIT = 100;
 export interface FxLimits {
   durable: number;
   programs: number;
+  /** Effets animés en cours sur une même machine, durables non compris. */
+  simultaneous: number;
 }
 
 const readLimit = (value: unknown) =>
@@ -811,8 +813,18 @@ const readLimit = (value: unknown) =>
 
 export function limitsIn(metadata: Record<string, unknown>): FxLimits {
   const settings = metadata[FX_ROOM_KEY] as { limits?: Partial<Record<keyof FxLimits, unknown>> } | undefined;
-  return { durable: readLimit(settings?.limits?.durable), programs: readLimit(settings?.limits?.programs) };
+  return {
+    durable: readLimit(settings?.limits?.durable),
+    programs: readLimit(settings?.limits?.programs),
+    simultaneous: readLimit(settings?.limits?.simultaneous),
+  };
 }
+
+/** Places gardées pour le MJ : ni les joueurs ni les programmes ne peuvent l'empêcher de lancer un sort. */
+const RESERVED_FOR_GM = 2;
+
+/** La part des effets simultanés laissée aux joueurs et aux programmes. */
+export const othersLimit = (simultaneous: number) => Math.max(1, simultaneous - RESERVED_FOR_GM);
 
 /** Une saisie hors limites revient à la valeur permise la plus proche ; illisible, elle ne change rien. */
 export function parseLimit(raw: string, current: number) {

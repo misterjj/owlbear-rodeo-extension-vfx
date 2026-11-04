@@ -97,8 +97,10 @@ wheel. Spells are saved on the token: they follow it and work for anyone who con
 - **Visible to the GM only:** players see nothing and a teleport does not move the token.
 - **Players can cast effects:** they get the Cast tab for the whole room. They can only teleport tokens that
   Owlbear lets them move by hand.
-- **Limits per scene:** 10 lasting effects and 10 programs by default, from 1 to 100. A warning explains the
-  cost: a lasting effect continuously uses every player's graphics card.
+- **Limits per scene:** 10 lasting effects, 10 programs and 10 simultaneous effects by default, from 1 to 100. A
+  warning explains the cost: a lasting effect continuously uses every player's graphics card.
+- **Simultaneous effects:** how many animated effects can play at once on each machine, lasting effects aside.
+  Beyond that, a new effect is ignored. Players and programs stop 2 short of the limit, so the GM can always cast.
 
 A teleport starting from a token moves it, snapped to the grid. Starting from any other point on the map, it
 is purely visual.

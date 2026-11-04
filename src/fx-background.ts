@@ -48,6 +48,7 @@ import {
   parseWheelCast,
   playerCooldownOver,
   limitsIn,
+  othersLimit,
   playersAllowedIn,
   previewOutline,
   projectileDuration,
@@ -111,12 +112,6 @@ import {
 
 const WHEEL_SIZE = 380;
 const FRAME_MS = 33;
-/** Au-delà, un nouvel effet est ignoré pour ne pas ralentir les petites machines. */
-const MAX_ACTIVE = 6;
-/** Les joueurs ne peuvent pas occuper toute la place : le MJ doit pouvoir lancer les siens. */
-const MAX_ACTIVE_FROM_PLAYERS = 4;
-/** Un décor animé ne doit jamais empêcher de lancer un sort à la main. */
-const MAX_ACTIVE_FROM_PROGRAMS = 3;
 /** Un tir plus ancien est abandonné : l'onglet était en arrière-plan, ou la machine en retard. */
 const STALE_SHOT_MS = 1500;
 const PROGRAM_TICK_MS = 100;
@@ -458,6 +453,8 @@ const randomSeed = () => Math.random() * 100;
 let role: "GM" | "PLAYER" = "PLAYER";
 let playersAllowed = false;
 let durableLimit = DEFAULT_LIMIT;
+/** Au-delà, un nouvel effet est ignoré pour ne pas ralentir les petites machines. */
+let simultaneousLimit = DEFAULT_LIMIT;
 
 /** Zones des tokens, gardées tant que rien ne bouge : l'aperçu les lit à chaque mouvement. */
 let tokenAreas: Promise<TokenArea[]> | undefined;
@@ -842,7 +839,7 @@ const stillRunning = ({ id, startedAt }: Program) =>
 
 /** Parcourt tous les points à la suite. Une chaîne commencée va au bout, tant qu'elle reste active. */
 async function fireChain(program: Program, index: number) {
-  if (active >= MAX_ACTIVE_FROM_PROGRAMS) return;
+  if (active >= othersLimit(simultaneousLimit)) return;
   const areas = await loadTokenAreas();
   const hops = chainHops(
     program.anchors.map(({ at, token }) =>
@@ -857,7 +854,7 @@ async function fireChain(program: Program, index: number) {
       if (!stillRunning(program)) return;
     }
     const seed = shotRandom(program, index, 3 + hop) * 100;
-    play(buildMessage(choice, at, from, multiplier, seed), MAX_ACTIVE).catch(warn);
+    play(buildMessage(choice, at, from, multiplier, seed), simultaneousLimit).catch(warn);
   }
 }
 
@@ -902,7 +899,7 @@ async function firePermanent(program: Program, index: number, time: number) {
   // Seule une trace a besoin d'une animation à part : un effet qui tient apparaît de lui-même.
   if (LEAVES_TRACE.includes(program.style)) {
     const { at, from, seed } = effects[0];
-    play(buildMessage(choice, at, from, multiplier, seed), MAX_ACTIVE_FROM_PROGRAMS).catch(warn);
+    play(buildMessage(choice, at, from, multiplier, seed), othersLimit(simultaneousLimit)).catch(warn);
   }
   if (role !== "GM") return;
   placingEffects = placingEffects
@@ -940,7 +937,7 @@ async function fireProgram(program: Program, index: number, time: number) {
   if (!at || (anchors.from && !from)) return;
   const choice = { ...program, gmOnly: false, durable: false };
   const message = buildMessage(choice, at, from, await cellValue(), shotRandom(program, index, 3) * 100);
-  await play(message, MAX_ACTIVE_FROM_PROGRAMS);
+  await play(message, othersLimit(simultaneousLimit));
 }
 
 /** Repères visibles du MJ seul. Ils ne sont refaits que si la liste des points a changé. */
@@ -1601,11 +1598,11 @@ async function castLimit(connectionId: string) {
     connectionId === own
       ? role
       : (await OBR.party.getPlayers()).find((player) => player.connectionId === connectionId)?.role;
-  if (senderRole === "GM") return MAX_ACTIVE;
+  if (senderRole === "GM") return simultaneousLimit;
   const now = performance.now();
   if (!playersAllowed || !playerCooldownOver(lastPlayerCast.get(connectionId), now)) return 0;
   lastPlayerCast.set(connectionId, now);
-  return MAX_ACTIVE_FROM_PLAYERS;
+  return othersLimit(simultaneousLimit);
 }
 
 export async function setupFx() {
@@ -1659,12 +1656,14 @@ export async function setupFx() {
   OBR.room.onMetadataChange((metadata) => {
     playersAllowed = playersAllowedIn(metadata);
     durableLimit = limitsIn(metadata).durable;
+    simultaneousLimit = limitsIn(metadata).simultaneous;
     syncTool();
   });
   const room = await OBR.room.getMetadata();
   role = await OBR.player.getRole();
   playersAllowed = playersAllowedIn(room);
   durableLimit = limitsIn(room).durable;
+  simultaneousLimit = limitsIn(room).simultaneous;
   syncTool();
   OBR.action.setTitle(t("app.title")).catch(warn);
   scheduleReconcile();

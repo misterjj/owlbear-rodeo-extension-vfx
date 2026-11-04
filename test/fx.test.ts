@@ -13,6 +13,7 @@ import {
   DEFAULT_LIMIT,
   MAX_LIMIT,
   limitsIn,
+  othersLimit,
   parseLimit,
   roomSettingsWith,
   castsOnSelf,
@@ -689,10 +690,20 @@ describe("limites réglables", () => {
   const room = (limits: unknown) => ({ "vfx-owlbear/reglages": { players: true, limits } });
 
   it("vaut 10 par défaut, et tant que la valeur est illisible", () => {
-    expect(limitsIn({})).toEqual({ durable: 10, programs: 10 });
-    expect(limitsIn(room({ durable: "x", programs: 0 }))).toEqual({ durable: 10, programs: 10 });
-    expect(limitsIn(room({ durable: 2.5, programs: MAX_LIMIT + 1 }))).toEqual({ durable: 10, programs: 10 });
-    expect(limitsIn(room({ durable: 25, programs: 1 }))).toEqual({ durable: 25, programs: 1 });
+    expect(limitsIn({})).toEqual({ durable: 10, programs: 10, simultaneous: 10 });
+    expect(limitsIn(room({ durable: "x", programs: 0, simultaneous: -1 }))).toEqual({ durable: 10, programs: 10, simultaneous: 10 });
+    expect(limitsIn(room({ durable: 2.5, programs: MAX_LIMIT + 1 }))).toEqual({ durable: 10, programs: 10, simultaneous: 10 });
+    expect(limitsIn(room({ durable: 25, programs: 1, simultaneous: 30 }))).toEqual({ durable: 25, programs: 1, simultaneous: 30 });
+  });
+
+  it("une salle réglée avant les effets simultanés garde ses limites et prend le défaut", () => {
+    expect(limitsIn(room({ durable: 25, programs: 1 }))).toEqual({ durable: 25, programs: 1, simultaneous: 10 });
+  });
+
+  it("garde des places au MJ, sans jamais bloquer les autres", () => {
+    expect(othersLimit(10)).toBe(8);
+    expect(othersLimit(3)).toBe(1);
+    expect(othersLimit(1)).toBe(1);
   });
 
   it("ramène une saisie dans les bornes et ignore ce qui est illisible", () => {
@@ -705,8 +716,8 @@ describe("limites réglables", () => {
   });
 
   it("ne perd pas les autres réglages de la salle", () => {
-    const limits = { durable: 5, programs: 6 };
-    expect(roomSettingsWith(room({ durable: 1, programs: 1 }), { limits })).toEqual(room(limits));
+    const limits = { durable: 5, programs: 6, simultaneous: 7 };
+    expect(roomSettingsWith(room({ durable: 1, programs: 1, simultaneous: 1 }), { limits })).toEqual(room(limits));
     expect(roomSettingsWith(room(limits), { players: false })).toEqual({ "vfx-owlbear/reglages": { players: false, limits } });
     expect(playersAllowedIn(roomSettingsWith({}, { limits }))).toBe(false);
   });

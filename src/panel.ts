@@ -53,7 +53,7 @@ let isGm = false;
 let playersAllowed = false;
 let unit = "cases";
 let running: DurableEntry[] = [];
-let limits: FxLimits = { durable: DEFAULT_LIMIT, programs: DEFAULT_LIMIT };
+let limits: FxLimits = { durable: DEFAULT_LIMIT, programs: DEFAULT_LIMIT, simultaneous: DEFAULT_LIMIT };
 let compact = false;
 let toolActive = false;
 let listening = false;
@@ -726,6 +726,9 @@ function limitWarning() {
     limits.programs > DEFAULT_LIMIT
       ? t("settings.warnPrograms")
       : "",
+    limits.simultaneous > DEFAULT_LIMIT
+      ? t("settings.warnSimultaneous")
+      : "",
   ].filter(Boolean);
   return warnings.map((text) => `<p class="warning">⚠ ${text}</p>`).join("");
 }
@@ -754,6 +757,7 @@ function renderSettings() {
       <h2>${t("settings.limits")}</h2>
       <label class="limit">${t("settings.limitDurable")}<input id="limit-durable" type="number" min="1" max="${MAX_LIMIT}" step="1" value="${limits.durable}" /></label>
       <label class="limit">${t("settings.limitPrograms")}<input id="limit-programs" type="number" min="1" max="${MAX_LIMIT}" step="1" value="${limits.programs}" /></label>
+      <label class="limit">${t("settings.limitSimultaneous")}<input id="limit-simultaneous" type="number" min="1" max="${MAX_LIMIT}" step="1" value="${limits.simultaneous}" /></label>
       <div id="limit-warning">${limitWarning()}</div>
       <p class="note">${t("settings.limitsHelp", { limit: DEFAULT_LIMIT })}</p>
     </section>
@@ -784,7 +788,7 @@ function renderSettings() {
         players.checked = playersAllowed;
       });
   };
-  for (const key of ["durable", "programs"] as const) {
+  for (const key of ["durable", "programs", "simultaneous"] as const) {
     const input = settingsPane.querySelector<HTMLInputElement>(`#limit-${key}`)!;
     input.onchange = () => {
       const previous = limits;
@@ -816,7 +820,7 @@ export async function watchRoomSettings() {
   const read = (metadata: Metadata) => {
     const nextLimits = limitsIn(metadata);
     const nextPlayers = playersAllowedIn(metadata);
-    const changed = nextPlayers !== playersAllowed || nextLimits.durable !== limits.durable || nextLimits.programs !== limits.programs;
+    const changed = nextPlayers !== playersAllowed || nextLimits.durable !== limits.durable || nextLimits.programs !== limits.programs || nextLimits.simultaneous !== limits.simultaneous;
     limits = nextLimits;
     playersAllowed = nextPlayers;
     if (!changed) return;
