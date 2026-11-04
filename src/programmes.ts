@@ -160,7 +160,10 @@ function compactGroup(group: string, members: Program[]) {
 function bindToggles() {
   // Arrêter retire les effets permanents ; une série qui se termine seule ne passe pas par ici.
   const setActive = (ids: string[], active: boolean) =>
-    saveWith((current) => withActive(current, ids, active, Date.now()), active ? [] : ids).catch(warn);
+    OBR.player
+      .getConnectionId()
+      .then((by) => saveWith((current) => withActive(current, ids, active, Date.now(), by), active ? [] : ids))
+      .catch(warn);
   app.querySelectorAll<HTMLButtonElement>("[data-toggle]").forEach((button) => {
     button.onclick = () => {
       const program = programs.find(({ id }) => id === button.dataset.toggle);

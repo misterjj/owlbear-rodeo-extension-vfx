@@ -12,11 +12,13 @@ import {
   nextShot,
   normalizeTiming,
   programProblem,
+  FX_PROGRAMS_KEY,
   programsIn,
   shotAfter,
   shotAnchors,
   shotDuration,
   shotRandom,
+  sceneWriter,
   withActive,
   withProgram,
   type Program,
@@ -421,5 +423,25 @@ describe("effets permanents", () => {
     const anchors = [point(0), point(100), point(0)];
     expect(shotSlot(anchors, { at: anchors[2] })).toBe("0");
     expect(shotSlot(anchors, { from: anchors[1], at: anchors[2] })).toBe("1>0");
+  });
+});
+
+describe("un seul MJ écrit dans la scène", () => {
+  it("laisse écrire celui qui a activé le programme, tant qu'il est là", () => {
+    expect(sceneWriter(["a", "b"], "b")).toBe("b");
+    expect(sceneWriter(["a", "c"], "b")).toBe("a");
+  });
+
+  it("choisit le même MJ chez tout le monde quand rien ne le désigne", () => {
+    expect(sceneWriter(["b", "a"])).toBe(sceneWriter(["a", "b"]));
+    expect(sceneWriter([])).toBeUndefined();
+  });
+
+  it("note qui active, et ne l'efface pas à l'arrêt", () => {
+    const [off] = programsIn({ [FX_PROGRAMS_KEY]: [{ ...base, active: false, startedBy: 12 }] });
+    expect(off.startedBy).toBeUndefined();
+    const [on] = withActive([off], [off.id], true, 9000, "a");
+    expect(on.startedBy).toBe("a");
+    expect(withActive([on], [on.id], false, 9500)[0].startedBy).toBe("a");
   });
 });

@@ -59,6 +59,8 @@ export interface Program extends FxCast, Timing {
   permanent: boolean;
   /** Points tirés au hasard, ou parcourus dans l'ordre et en boucle. */
   order: PointOrder;
+  /** Connexion du MJ qui l'a activé : ses tirs sont calés sur son horloge. */
+  startedBy?: string;
 }
 
 export type PointOrder = "random" | "sequence";
@@ -130,6 +132,7 @@ export function programsIn(metadata: Record<string, unknown>): Program[] {
         anchors: program.anchors.slice(0, MAX_ANCHORS),
         permanent,
         order: program.order === "sequence" ? ("sequence" as const) : ("random" as const),
+        startedBy: typeof program.startedBy === "string" ? program.startedBy : undefined,
       };
     });
 }
@@ -233,12 +236,21 @@ export function shotAnchors(program: Program, index: number): { at: Anchor; from
 }
 
 /** Change l'état des programmes visés. Une même heure de départ garde leurs décalages alignés. */
-export function withActive(programs: Program[], ids: string[], active: boolean, now: number): Program[] {
+export function withActive(programs: Program[], ids: string[], active: boolean, now: number, by?: string): Program[] {
   return programs.map((program) =>
     ids.includes(program.id) && program.active !== active
-      ? { ...program, active, startedAt: active ? now : program.startedAt }
+      ? { ...program, active, startedAt: active ? now : program.startedAt, ...(active ? { startedBy: by } : {}) }
       : program,
   );
+}
+
+/**
+ * Le seul MJ qui écrit dans la scène pour un programme, parmi ceux connectés : celui qui l'a activé,
+ * dont l'horloge est la bonne, sinon toujours le même. Sans `startedBy`, pour ce qui ne vient pas d'un programme.
+ */
+export function sceneWriter(gmConnections: string[], startedBy?: string) {
+  if (startedBy !== undefined && gmConnections.includes(startedBy)) return startedBy;
+  return [...gmConnections].sort()[0];
 }
 
 export function withProgram(programs: Program[], program: Program): Program[] {

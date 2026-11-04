@@ -10,6 +10,7 @@ import OBR, {
   type Matrix,
   type ToolEvent,
   type Uniform,
+  type Player,
 } from "@owlbear-rodeo/sdk";
 import {
   ELEMENTS,
@@ -84,6 +85,7 @@ import {
   shotAfter,
   shotAnchors,
   shotRandom,
+  sceneWriter,
   withActive,
   type Anchor,
   type Program,
@@ -452,6 +454,20 @@ function send(message: FxMessage) {
 const randomSeed = () => Math.random() * 100;
 
 let role: "GM" | "PLAYER" = "PLAYER";
+let ownConnection = "";
+let otherGMs: string[] = [];
+
+/** Plusieurs MJ calculent les mêmes tirs : un seul écrit, sinon leurs écritures s'effacent. */
+const writesScene = (startedBy?: string) =>
+  role === "GM" &&
+  ownConnection !== "" &&
+  sceneWriter([ownConnection, ...otherGMs], startedBy) === ownConnection;
+
+const readOtherGMs = (players: Player[]) => {
+  otherGMs = players
+    .filter(({ role: other, connectionId }) => other === "GM" && connectionId !== ownConnection)
+    .map(({ connectionId }) => connectionId);
+};
 let playersAllowed = false;
 let durableLimit = DEFAULT_LIMIT;
 /** Au-delà, un nouvel effet est ignoré pour ne pas ralentir les petites machines. */
@@ -764,7 +780,7 @@ async function reconcileDurables() {
   }
   // Le porteur a été supprimé : le MJ nettoie la description pour tout le monde.
   const orphans = entries.filter(({ carrier }) => carrier && !carriers.has(carrier.id));
-  if (role === "GM" && orphans.length) await saveDurables(entries.filter((e) => !orphans.includes(e)));
+  if (writesScene() && orphans.length) await saveDurables(entries.filter((e) => !orphans.includes(e)));
 }
 
 let programs: Program[] = [];
@@ -820,9 +836,9 @@ const finishing = new Set<string>();
 let finishingPrograms = Promise.resolve();
 
 /** Série terminée : le MJ le note pour tout le monde, et le programme peut être relancé. */
-function finishProgram({ id, startedAt }: Program) {
+function finishProgram({ id, startedAt, startedBy }: Program) {
   const key = `${id}/${startedAt}`;
-  if (role !== "GM" || finishing.has(key)) return;
+  if (!writesScene(startedBy) || finishing.has(key)) return;
   finishing.add(key);
   finishingPrograms = finishingPrograms
     .then(async () => {
@@ -903,7 +919,7 @@ async function firePermanent(program: Program, index: number, time: number) {
     const { at, from, seed } = effects[0];
     play(buildMessage(choice, at, from, multiplier, seed), othersLimit(simultaneousLimit)).catch(warn);
   }
-  if (role !== "GM") return;
+  if (!writesScene(program.startedBy)) return;
   placingEffects = placingEffects
     .then(async () => {
       const [metadata, room] = await Promise.all([OBR.scene.getMetadata(), OBR.room.getMetadata()]);
@@ -1659,6 +1675,9 @@ export async function setupFx() {
   });
   const room = await OBR.room.getMetadata();
   role = await OBR.player.getRole();
+  ownConnection = await OBR.player.getConnectionId();
+  readOtherGMs(await OBR.party.getPlayers());
+  OBR.party.onChange(readOtherGMs);
   playersAllowed = playersAllowedIn(room);
   durableLimit = limitsIn(room).durable;
   simultaneousLimit = limitsIn(room).simultaneous;
