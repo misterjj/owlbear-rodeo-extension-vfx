@@ -32,6 +32,7 @@ import {
   defaultSpellName,
   cubeOnFace,
   aimsFromToken,
+  directionAngle,
   appearAt,
   castTiming,
   isSustained,
@@ -274,6 +275,7 @@ async function play(message: FxMessage, limit: number) {
           ...common,
           { name: "radius", value: dpi * STYLES[style].reach * scale },
           { name: "claws", value: style === "griffes" ? 1 : 0 },
+          { name: "dir", value: message.angle ?? -1 },
         ],
         scaledDuration(650, scale),
       );
@@ -673,7 +675,12 @@ function durableSpec(entry: DurableEntry, at: Point, dpi: number) {
       return {
         sksl: DURABLE_SKSL[style],
         position: at,
-        uniforms: [...common, radius, { name: "claws", value: style === "griffes" ? 1 : 0 }],
+        uniforms: [
+          ...common,
+          radius,
+          { name: "claws", value: style === "griffes" ? 1 : 0 },
+          { name: "dir", value: entry.angle ?? -1 },
+        ],
       };
     case "morsure":
       return { sksl: DURABLE_SKSL.morsure, position: at, uniforms: [...common, radius] };
@@ -919,6 +926,7 @@ async function firePermanent(program: Program, index: number, time: number) {
         ...(carrier ? { carrier: { id: carrier.id, name: carrier.name } } : {}),
         scale,
         owner: OBR.player.id,
+        ...directionAngle(program),
         ...(LEAVES_TRACE.includes(program.style)
           ? { restAt: time + restDelay(program.style, scale, from ?? at, at, dpi) }
           : { enterAt: time + start }),
@@ -1179,6 +1187,7 @@ async function placeDurable(
     ...(carrier ? { carrier: { id: carrier.id, name: carrier.name } } : {}),
     ...(aiming && carrier?.id !== aiming.token ? { caster: { token: aiming.token, spell: aiming.spell.name } } : {}),
     ...(carrier && placement ? { offset: placement.offset } : {}),
+    ...directionAngle(choice),
     ...(placement ? { angle: placement.angle } : {}),
     gmOnly: choice.gmOnly,
     owner: OBR.player.id,
@@ -1194,7 +1203,7 @@ let aiming: { spell: Favorite; token: string; tool: string; mode: string | undef
 /** Réglage à appliquer : le sort visé s'il y en a un, sinon celui du panneau. */
 function currentChoice(): FxChoice {
   const saved = loadChoice(localStorage);
-  const { element, style, size, exact, durable, onFace } = aiming?.spell ?? saved;
+  const { element, style, size, exact, durable, onFace, direction } = aiming?.spell ?? saved;
   // Un réglage laissé par une partie de MJ dans ce navigateur ne vaut pas pour un joueur.
   return {
     element,
@@ -1204,6 +1213,7 @@ function currentChoice(): FxChoice {
     durable: durable === true,
     gmOnly: saved.gmOnly && role === "GM",
     ...(onFace === true ? { onFace: true } : {}),
+    ...(direction === undefined ? {} : { direction }),
   };
 }
 
@@ -1238,7 +1248,7 @@ async function castFromToken(tokenId: string, spell: Favorite) {
   if (!token) return;
   const lit = startsOnFace(spell) && (await isLitOn(token, { ...currentChoice(), ...spell, durable: spell.durable === true }));
   if (firesFromToken(spell) || lit) {
-    const choice = { ...currentChoice(), ...spell, durable: spell.durable === true };
+    const choice = { ...currentChoice(), ...spell, durable: spell.durable === true, direction: spell.direction };
     if (isDurable(choice)) {
       await placeDurable(choice, spell.name, token.center, token);
     } else {

@@ -3,6 +3,7 @@ import { FX_TARGET_KEY, FX_UI_CHANNEL, playersAllowedIn } from "./fx";
 import { setCastCompact, setupCast, setupSettings, targetToken, watchRoomSettings } from "./panel";
 import { setProgramsCompact, setupPrograms } from "./programmes";
 import { currentLanguage, t, type TextKey } from "./i18n";
+import { watchDirectionFields } from "./direction-field";
 import { watchSteppers } from "./stepper";
 import "./panel.css";
 import "./programmes.css";
@@ -136,6 +137,7 @@ OBR.onReady(async () => {
   post(tab === "cast" ? (pending ? "arm" : "arm-on-load") : "disarm");
   followHeight(pane("shell"));
   watchSteppers(app);
+  watchDirectionFields(app);
   document.addEventListener("keydown", (event) => {
     // Le clavier reste dans cette fenêtre tant qu'on n'a pas cliqué sur la carte.
     if (event.key === "Escape" && !event.defaultPrevented) post("escape");

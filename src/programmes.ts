@@ -1,7 +1,8 @@
 import OBR, { type Metadata } from "@owlbear-rodeo/sdk";
-import { DEFAULT_LIMIT, FX_DURABLE_KEY, STYLES, durablesIn, elementLabel, exactZoneLabel, styleLabel, isExact, limitsIn, type DurableEntry, type ElementId, type SizeId, type StyleId } from "./fx";
+import { DEFAULT_LIMIT, FX_DURABLE_KEY, STYLES, hasDirection, durablesIn, elementLabel, exactZoneLabel, styleLabel, isExact, limitsIn, type DurableEntry, type ElementId, type SizeId, type StyleId } from "./fx";
 import { elementColor, elementGrid, elementValue, pickerRow, sizeRow, styleGrid, type PickerId } from "./effect-fields";
 import { STYLE_ICONS } from "./fx-icons";
+import { directionField, readDirectionField } from "./direction-field";
 import { t } from "./i18n";
 import {
   FX_PROGRAMS_KEY,
@@ -283,6 +284,7 @@ function captureForm() {
     offset: number("offset") ?? 0,
     shots: number("shots") ?? null,
     permanent: app.querySelector<HTMLInputElement>("#permanent")?.checked ?? false,
+    direction: app.querySelector("[data-direction]") ? readDirectionField(app) : draft.direction,
   };
 }
 
@@ -390,6 +392,7 @@ function renderForm() {
       ${openPicker === "style" ? styleGrid(d.style) : ""}
       ${sizeRow(d.size, usesExact)}
       ${zone ? `<label class="inline"><span>${t("zone.exact", { what: exactZoneLabel(d.style) })} (<span data-unit>${escapeHtml(unit)}</span>)</span><input id="exact" type="number" min="0" step="any" data-clearable value="${d.exact ?? ""}" /></label>` : ""}
+      ${hasDirection(d.style) ? directionField(d.direction) : ""}
       <h2>${t("program.rhythm")}</h2>
       <div class="fields">
         <label>${t("program.minInterval")}<input id="min" type="number" min="${MIN_INTERVAL}" step="0.1" value="${d.min}" /></label>

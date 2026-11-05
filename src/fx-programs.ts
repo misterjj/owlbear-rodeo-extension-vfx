@@ -6,6 +6,7 @@ import {
   SIZES,
   STYLES,
   isExact,
+  readDirection,
   isKeyOf,
   isPoint,
   scaledDuration,
@@ -61,6 +62,8 @@ export interface Program extends FxCast, Timing {
   order: PointOrder;
   /** Connexion du MJ qui l'a activé : ses tirs sont calés sur son horloge. */
   startedBy?: string;
+  /** Griffes et coup : sens en degrés. Absent : au hasard. */
+  direction?: number;
 }
 
 export type PointOrder = "random" | "sequence";
@@ -133,6 +136,7 @@ export function programsIn(metadata: Record<string, unknown>): Program[] {
         permanent,
         order: program.order === "sequence" ? ("sequence" as const) : ("random" as const),
         startedBy: typeof program.startedBy === "string" ? program.startedBy : undefined,
+        direction: readDirection(program.direction),
       };
     });
 }

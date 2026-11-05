@@ -314,7 +314,25 @@ export interface FxCast {
   size: SizeId;
 }
 
+/** Griffes et coup partent dans un sens : au hasard, ou celui qu'on choisit. */
+export const hasDirection = (style: StyleId) => style === "coup" || style === "griffes";
+
+export const readDirection = (value: unknown) =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 360 ? value : undefined;
+
+/**
+ * Angle à passer à l'effet. `direction` se lit comme une boussole, en degrés : 0 vers le haut, 90 vers la droite.
+ * Le trait balaie son axe x, tourné de -angle à l'écran, où y descend.
+ */
+export function directionAngle({ style, direction }: { style: StyleId; direction?: number }): { angle?: number } {
+  const degrees = readDirection(direction);
+  if (!hasDirection(style) || degrees === undefined) return {};
+  return { angle: (((90 - degrees) % 360 + 360) % 360) * (Math.PI / 180) };
+}
+
 export interface FxChoice extends FxCast {
+  /** Griffes et coup : sens en degrés. Absent : au hasard. */
+  direction?: number;
   /** Rayon, longueur ou côté dans l'unité de la scène ; remplace la taille pour les styles de zone. */
   exact: number | null;
   /** Seuls les MJ voient l'effet. */
@@ -402,6 +420,7 @@ export function buildMessage(
     seed,
     ...(from ? { from } : {}),
     ...(cells === undefined ? {} : { cells }),
+    ...directionAngle(choice),
     ...(choice.gmOnly ? { gmOnly: true as const } : {}),
   };
 }
@@ -429,6 +448,7 @@ export function loadChoice(storage: ChoiceStorage): FxChoice {
       gmOnly: saved?.gmOnly === true,
       durable: saved?.durable === true,
       ...(saved?.onFace === true ? { onFace: true } : {}),
+      ...(readDirection(saved?.direction) === undefined ? {} : { direction: saved.direction }),
     };
   } catch {
     return DEFAULT_CHOICE;
@@ -524,6 +544,7 @@ export interface Favorite extends FxCast {
   onFace?: boolean;
   /** Sur la roue : part du token, ou attend qu'on vise un token ou la carte. */
   target?: SpellTarget;
+  direction?: number;
 }
 
 export type SpellTarget = "self" | "aim";
@@ -570,6 +591,7 @@ export function addFavorite(
     exact: choice.exact,
     ...(isDurable(choice) ? { durable: true } : {}),
     ...(startsOnFace(choice) ? { onFace: true } : {}),
+    ...(hasDirection(choice.style) && readDirection(choice.direction) !== undefined ? { direction: choice.direction } : {}),
   };
   const key = trimmed.toLowerCase();
   const index = favorites.findIndex((other) => other.name.toLowerCase() === key);
@@ -584,7 +606,8 @@ export const matchesFavorite = (favorite: Favorite, choice: FxChoice) =>
   favorite.size === choice.size &&
   favorite.exact === choice.exact &&
   Boolean(favorite.durable) === isDurable(choice) &&
-  startsOnFace(favorite) === startsOnFace(choice);
+  startsOnFace(favorite) === startsOnFace(choice) &&
+  (hasDirection(choice.style) ? favorite.direction === choice.direction : true);
 
 export interface Outline {
   points: Point[];
@@ -681,7 +704,7 @@ export function renameSpell(spells: Favorite[], index: number, name: string): Fa
 export function editSpell(spells: Favorite[], index: number, changes: Favorite): Favorite[] {
   const renamed = renameSpell(spells, index, changes.name);
   if (renamed === spells) return spells;
-  const { element, style, size, exact, target } = changes;
+  const { element, style, size, exact, target, direction } = changes;
   return renamed.map((spell, i) =>
     i === index
       ? {
@@ -693,6 +716,7 @@ export function editSpell(spells: Favorite[], index: number, changes: Favorite):
           ...(isDurable(changes) ? { durable: true } : {}),
           ...(startsOnFace(changes) ? { onFace: true } : {}),
           ...(canChooseTarget(style) && target ? { target } : {}),
+          ...(hasDirection(style) && readDirection(direction) !== undefined ? { direction } : {}),
         }
       : spell,
   );

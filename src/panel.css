@@ -172,3 +172,18 @@ input[type="number"]::-webkit-outer-spin-button { appearance: none; margin: 0; }
   .stepper input[type="number"] { height: auto; }
   .exact .stepper, .limit .stepper, .inline .stepper { width: 136px; }
 }
+
+.direction { margin-top: 6px; font-size: 12px; }
+.direction-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.direction-modes { display: flex; flex: none; border-radius: 6px; overflow: hidden; }
+.direction-modes button {
+  all: unset; box-sizing: border-box; padding: 4px 9px; background: rgb(255 255 255 / 0.1); font-size: 12px; cursor: pointer;
+}
+.direction-modes button:hover { background: rgb(255 255 255 / 0.2); }
+.direction-modes button[aria-pressed="true"] { background: rgb(187 153 255 / 0.45); font-weight: 600; }
+.direction-modes button:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+.direction-slider { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.direction-slider[hidden] { display: none; }
+.direction-slider input[type="range"] { flex: 1; min-width: 0; height: 24px; margin: 0; padding: 0; border: 0; background: none; accent-color: #bb99ff; }
+.direction-slider output { flex: none; width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+.direction-arrow { flex: none; width: 16px; color: #bb99ff; font-size: 15px; font-weight: 700; line-height: 1; text-align: center; }

@@ -23,11 +23,14 @@ export function stepValue(raw: string, direction: 1 | -1, { min, max, step, clea
   const value = raw.trim() === "" ? Number.NaN : Number(raw);
   if (!Number.isFinite(value)) {
     if (direction < 0) return clearable ? "" : raw;
-    return String(min !== undefined && min > 0 ? min : 1);
+    if (min !== undefined && (min > 0 || step !== "any")) return String(min);
+    return "1";
   }
   const size = step === "any" ? adaptiveStep(value, direction) : step;
   const next = Math.round((value + direction * size) * 1e6) / 1e6;
-  if (direction < 0 && clearable && (next <= 0 || (min !== undefined && next < min))) return "";
+  // Une zone de 0 ne veut rien dire : seul le pas libre s'arrête avant 0.
+  const belowRange = (step === "any" && next <= 0) || (min !== undefined && next < min);
+  if (direction < 0 && clearable && belowRange) return "";
   if (min !== undefined && next < min) return String(min);
   if (max !== undefined && next > max) return String(max);
   return String(next);

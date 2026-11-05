@@ -16,6 +16,7 @@ import {
   castTiming,
   FX_DURABLE_KEY,
   placedBySpell,
+  directionAngle,
   FX_SPELLS_KEY,
   spellTarget,
   canChooseTarget,
@@ -708,6 +709,34 @@ describe("manifest", () => {
   it("respecte la limite de description d'Owlbear", () => {
     const manifest = JSON.parse(readFileSync("public/manifest.json", "utf8"));
     expect(manifest.description.length).toBeLessThanOrEqual(128);
+  });
+});
+
+describe("direction des griffes et du coup", () => {
+  const cast = { element: "feu", size: "M", exact: null, gmOnly: false, durable: false } as const;
+
+  it("se lit comme une boussole, et reste au hasard sans valeur", () => {
+    expect(directionAngle({ style: "griffes", direction: 90 }).angle).toBeCloseTo(0);
+    expect(directionAngle({ style: "griffes", direction: 0 }).angle).toBeCloseTo(Math.PI / 2);
+    expect(directionAngle({ style: "coup", direction: 180 }).angle).toBeCloseTo((Math.PI * 3) / 2);
+    expect(directionAngle({ style: "griffes" })).toEqual({});
+    expect(directionAngle({ style: "griffes", direction: 500 })).toEqual({});
+    expect(directionAngle({ style: "morsure", direction: 90 })).toEqual({});
+  });
+
+  it("voyage dans le message, sans toucher l'angle d'un cube", () => {
+    const at = { x: 0, y: 0 };
+    expect(buildMessage({ ...cast, style: "griffes", direction: 0 }, at, undefined, 1, 1).angle).toBeCloseTo(Math.PI / 2);
+    expect(buildMessage({ ...cast, style: "griffes" }, at, undefined, 1, 1).angle).toBeUndefined();
+    expect(buildMessage({ ...cast, style: "cube", direction: 0 }, at, undefined, 1, 1).angle).toBeUndefined();
+  });
+
+  it("se garde dans un sort, et distingue deux favoris", () => {
+    const [saved] = addFavorite([], "Griffes", { ...cast, style: "griffes", direction: 45 });
+    expect(saved.direction).toBe(45);
+    expect(matchesFavorite(saved, { ...cast, style: "griffes", direction: 45 })).toBe(true);
+    expect(matchesFavorite(saved, { ...cast, style: "griffes" })).toBe(false);
+    expect(editSpell([saved], 0, { ...saved, style: "rayon" })[0].direction).toBeUndefined();
   });
 });
 

@@ -20,6 +20,8 @@ the map. Your last choice is kept. Element and style open with a click, one at a
   - arrow, projectile, beam, cone, wall and teleport take two clicks: the starting point, then the target
     or direction (`Escape` to cancel);
   - chain starts from the caster, then jumps to each new target you click (`Escape` or **Finish chain** to end).
+- **Direction:** in **More options**, strike and claws are **Random**, or **Fixed** with a slider from 0 to 360 degrees,
+  read like a compass (0 up, 90 right).
 - **Size:** XS, S, M, L or XL. For area spells (explosion, meteor, flame, rain, dome, cube, cloud, aura,
   transformation, healing, cone), an exact radius, length or side can be given in the scene's unit.
 

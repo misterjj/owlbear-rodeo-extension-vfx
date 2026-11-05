@@ -14,6 +14,7 @@ import {
   fitWheelLabel,
   isDurable,
   canChooseTarget,
+  hasDirection,
   placedBySpell,
   spellTarget,
   readableColor,
@@ -58,7 +59,7 @@ const close = () => OBR.popover.close(FX_WHEEL_ID);
 function detail(spell: Favorite) {
   const measure = spell.exact !== null && STYLES[spell.style].exactZone ? `${spell.exact} ${unit}` : spell.size;
   const targetLabel = canChooseTarget(spell.style) && !startsOnFace(spell) ? t(spellTarget(spell) === "self" ? "wheel.targetSelf" : "wheel.targetAim") : "";
-  const extras = [isDurable(spell) ? t("options.durable") : "", startsOnFace(spell) ? t("options.onFace") : "", targetLabel].filter(Boolean);
+  const extras = [isDurable(spell) ? t("options.durable") : "", startsOnFace(spell) ? t("options.onFace") : "", targetLabel, hasDirection(spell.style) && spell.direction !== undefined ? `${spell.direction}°` : ""].filter(Boolean);
   return [styleLabel(spell.style), elementLabel(spell.element), measure, ...extras].join(" · ");
 }
 

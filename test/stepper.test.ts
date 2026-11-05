@@ -25,6 +25,12 @@ describe("boutons − et +", () => {
     expect(stepValue("", 1, { min: 0, step: "any", clearable: true })).toBe("1");
     expect(stepValue("", 1, { min: 1, step: 1, clearable: true })).toBe("1");
     expect(stepValue("", -1, { min: 1, step: 1 })).toBe("");
+    // À pas fixe, 0 est une vraie valeur : on y passe avant de revenir à vide.
+    const direction = { min: 0, max: 360, step: 15, clearable: true };
+    expect(stepValue("", 1, direction)).toBe("0");
+    expect(stepValue("15", -1, direction)).toBe("0");
+    expect(stepValue("0", -1, direction)).toBe("");
+    expect(stepValue("345", 1, direction)).toBe("360");
   });
 
   it("revient à vide sous le minimum quand vide a un sens", () => {

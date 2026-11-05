@@ -4,6 +4,7 @@ import {
   FX_DURABLE_KEY,
   FX_SPELLS_KEY,
   canChooseTarget,
+  hasDirection,
   defaultTarget,
   spellTarget,
   type SpellTarget,
@@ -44,6 +45,7 @@ import {
   type SizeId,
   type StyleId,
 } from "./fx";
+import { directionField, readDirectionField } from "./direction-field";
 import { elementGrid, elementValue, pickerRow, sizeRow, styleGrid, swatch } from "./effect-fields";
 import { FX_PROGRAM_CHANNEL } from "./fx-programs";
 import { LANGUAGES, LANGUAGE_NAMES, languageSetting, setLanguageSetting, t, type Language } from "./i18n";
@@ -202,20 +204,25 @@ function foldHtml(id: FoldId, title: string, summary: string, content: string, f
 }
 
 /** Ce qui change l'effet au-delà de sa taille, résumé tant que c'est replié. */
+/** Seulement ce qui est réglé : le résumé ne doit pas laisser croire qu'une option est active. */
 function optionsSummary() {
-  const parts = [
+  return [
     usesExact() ? `${exactZoneLabel(choice.style)} ${choice.exact} <span data-unit>${escapeHtml(unit)}</span>` : "",
+    hasDirection(choice.style) && choice.direction !== undefined ? `${choice.direction}°` : "",
     isDurable(choice) ? t("options.durable") : "",
     startsOnFace(choice) ? t("options.onFace") : "",
-  ].filter(Boolean);
-  if (parts.length) return parts.join(" · ");
-  return [STYLES[choice.style].exactZone ? t("options.exact") : "", t("options.durable")]
+  ]
     .filter(Boolean)
-    .join(", ");
+    .join(" · ");
+}
+
+function refreshOptionsSummary() {
+  const summary = app.querySelector<HTMLElement>('[data-fold="options"] .fold-summary');
+  if (summary) summary.innerHTML = `${optionsSummary()} ▾`;
 }
 
 function optionsFold() {
-  const content = `${exactRow()}${durableRow()}${originRow()}`;
+  const content = `${exactRow()}${directionRow()}${durableRow()}${originRow()}`;
   return content.trim() ? foldHtml("options", t("options.title"), optionsSummary(), content) : "";
 }
 
@@ -252,6 +259,11 @@ function originRow() {
       <label><input type="radio" name="origin" value="centre" ${face ? "" : "checked"} /> ${t("options.originCenter")}</label>
       <label><input type="radio" name="origin" value="face" ${face ? "checked" : ""} /> ${t("options.originFace")}</label>
     </div>`;
+}
+
+function directionRow() {
+  if (!hasDirection(choice.style)) return "";
+  return directionField(choice.direction);
 }
 
 function durableRow() {
@@ -375,6 +387,7 @@ function spellEditHtml(spell: Favorite) {
           <option value="centre"${spell.onFace ? "" : " selected"}>${t("wheel.originCenter")}</option>
           <option value="face"${spell.onFace ? " selected" : ""}>${t("wheel.originFace")}</option>
         </select></label>
+        <div class="wide" id="spell-direction-row">${directionField(spell.direction)}</div>
         <label class="wide" id="spell-target-row">${t("wheel.target")}<select id="spell-target">
           <option value="self"${spellTarget(spell) === "self" ? " selected" : ""}>${t("wheel.targetSelf")}</option>
           <option value="aim"${spellTarget(spell) === "aim" ? " selected" : ""}>${t("wheel.targetAim")}</option>
@@ -412,6 +425,7 @@ function bindSpellEdit(index: number, container: HTMLElement) {
     // Posé sur une face, le cube part forcément du token : il n'y a rien d'autre à choisir.
     const onFace = style === "cube" && field<HTMLSelectElement>("origin").value === "face";
     field("target-row").hidden = !canChooseTarget(style) || onFace;
+    field("direction-row").hidden = !hasDirection(style);
   };
   showFieldsOfStyle();
   styleField.onchange = () => {
@@ -444,6 +458,7 @@ function bindSpellEdit(index: number, container: HTMLElement) {
       durable: field<HTMLInputElement>("durable").checked,
       onFace: field<HTMLSelectElement>("origin").value === "face",
       target: field<HTMLSelectElement>("target").value as SpellTarget,
+      direction: readDirectionField(form),
     };
     const spells = target!.spells;
     if (editSpell(spells, index, changes) === spells) {
@@ -547,9 +562,9 @@ function renderWheelSection() {
 function bindFavoriteChoices() {
   app.querySelectorAll<HTMLButtonElement>("[data-favorite]").forEach((element) => {
     element.onclick = () => {
-      const { element: fxElement, style, size, exact, durable, onFace } =
+      const { element: fxElement, style, size, exact, durable, onFace, direction } =
         favorites[Number(element.dataset.favorite)];
-      update({ element: fxElement, style, size, exact, durable: durable === true, onFace: onFace === true });
+      update({ element: fxElement, style, size, exact, durable: durable === true, onFace: onFace === true, direction });
       render();
     };
   });
@@ -669,8 +684,7 @@ function render() {
       const value = Number(exact.value);
       update({ exact: exact.value !== "" && Number.isFinite(value) && value > 0 ? value : null });
       app.querySelector("#sizes")!.classList.toggle("off", usesExact());
-      const summary = app.querySelector<HTMLElement>('[data-fold="options"] .fold-summary');
-      if (summary) summary.innerHTML = `${optionsSummary()} ▾`;
+      refreshOptionsSummary();
       app.querySelectorAll<HTMLButtonElement>("[data-favorite]").forEach((element) => {
         const favorite = favorites[Number(element.dataset.favorite)];
         element.setAttribute("aria-pressed", String(matchesFavorite(favorite, choice)));
@@ -683,6 +697,13 @@ function render() {
       render();
     };
   });
+  const direction = app.querySelector<HTMLElement>("[data-direction]");
+  if (direction) {
+    direction.oninput = () => {
+      update({ direction: readDirectionField(app) });
+      refreshOptionsSummary();
+    };
+  }
   const durable = app.querySelector<HTMLInputElement>("#durable");
   if (durable) {
     durable.onchange = () => {

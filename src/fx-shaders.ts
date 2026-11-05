@@ -470,14 +470,15 @@ half4 main(float2 coord) {
 const slash = (timing: Timing) => `${common(timing, 1)}
 uniform float radius;
 uniform float claws;
+uniform float dir;
 
 half4 main(float2 coord) {
   ${timing.main}
   vec2 raw = local(coord) / radius;
   if (length(raw) > 1.5) return half4(0.0);
 
-  // La graine donne le sens du coup, identique chez tous les joueurs.
-  float angle = hash(vec2(seed, 4.4)) * 6.2832;
+  // Le sens choisi, sinon celui de la graine, identique chez tous les joueurs.
+  float angle = dir >= 0.0 ? dir : hash(vec2(seed, 4.4)) * 6.2832;
   float c = cos(angle);
   float s = sin(angle);
   vec2 p = vec2(c * raw.x - s * raw.y, s * raw.x + c * raw.y);
