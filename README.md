@@ -19,7 +19,7 @@ the map. Your last choice is kept. Element and style open with a click, one at a
     cast with one click on the map;
   - arrow, projectile, beam, cone, wall and teleport take two clicks: the starting point, then the target
     or direction (`Escape` to cancel);
-  - chain starts from the caster, then jumps to each new target you click (`Escape` to finish).
+  - chain starts from the caster, then jumps to each new target you click (`Escape` or **Finish chain** to end).
 - **Size:** XS, S, M, L or XL. For area spells (explosion, meteor, flame, rain, dome, cube, cloud, aura,
   transformation, healing, cone), an exact radius, length or side can be given in the scene's unit.
 
@@ -27,7 +27,8 @@ The **–** button shrinks the window to the essentials: the current effect, fav
 lasting effects. In the Programs tab, it becomes a list that turns programs on and off. If you pick another
 tool, a message says so and **Resume** gives control back to the tab. Closing the window restores your
 previous tool. **Stop casting** does the same without closing the window, and **Cancel aiming** drops a first point
-already placed.
+already placed. `Escape` does the same: it cancels the aim if there is one, otherwise it stops casting. Reloading the
+page does not take over the map: **Resume** does.
 
 A cube cast from a token can be **centered** or **on a face**, as with *Thunderwave*. On a face, a second
 click picks the direction, anywhere around the token: the cube sits against the token and faces it. When
@@ -51,7 +52,9 @@ visible to people who join during the game. Each style lasts in its own way:
   on the map. A lasting chain leaves one effect per jump, until `Escape`.
 - The **Lasting effects** list removes them one by one or all at once (10 per scene at most by default).
 
-A lasting spell on the wheel turns on and off with a click on its sector. A darkness cloud is almost opaque,
+A lasting spell attached to its token turns on and off with a click on its sector. If it was placed elsewhere, such
+as a wall, the sector lights up and a click opens a second wheel: **New**, each active effect by number (hovering one
+highlights it on the map), **Stop all**, and **Back** to return to the spells. The wheel lists the 9 most recent. A darkness cloud is almost opaque,
 even for the GM. With **Visible to the GM only**, players do not get it on their screen. These effects ignore
 walls and do not change vision rules.
 
@@ -86,7 +89,10 @@ take priority.
 Each token can keep up to 8 spells, shown on a wheel around it.
 
 **During play:** click the token with the select tool, then **Spells** in its menu. Clicking a spell casts it.
-Aura, transformation, healing, dome and lasting spells other than walls fire from the token at once. The others
+Effects that are not directed have a **Target**, set with ✎: **On the token** fires at once from the token, **Aim it**
+waits for a click on another token or on the map, as for a shield cast on an ally. Aura, transformation, healing and
+dome start on the token, the others are aimed. Directed effects start from the token, except a wall, which takes two
+free clicks on the map. Spells that aim
 wait for a click to aim, then you get your tool back (`Escape` to cancel).
 
 **To prepare it:** select the token, or use **Choose a token on the map**, in the **Cast** tab. The **Wheel**

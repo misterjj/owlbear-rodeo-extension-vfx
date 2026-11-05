@@ -3,6 +3,7 @@ import OBR, {
   buildCurve,
   buildEffect,
   buildLabel,
+  buildLine,
   buildShape,
   isCurve,
   isEffect,
@@ -30,6 +31,7 @@ import {
   coneTarget,
   defaultSpellName,
   cubeOnFace,
+  aimsFromToken,
   appearAt,
   castTiming,
   isSustained,
@@ -517,6 +519,8 @@ const tokenUnderPointer = (event: ToolEvent) =>
 const cellValue = async () => (await OBR.scene.grid.getScale()).parsed.multiplier;
 
 let source: Point | undefined;
+const REPEATED_CLICK_MS = 400;
+let sourceMarkedAt = 0;
 /** Token sur lequel le lanceur a été posé, s'il y en a un. */
 let sourceToken: TokenArea | undefined;
 
@@ -539,6 +543,7 @@ async function clearSource() {
 async function markSource(point: Point, token?: TokenArea) {
   source = point;
   sourceToken = token;
+  sourceMarkedAt = performance.now();
   postAimState(true);
   const dpi = await OBR.scene.grid.getDpi();
   const marker = buildShape()
@@ -1082,6 +1087,51 @@ async function scheduleReconcile() {
   reconciling = false;
 }
 
+const HIGHLIGHT_PREFIX = "vfx-owlbear/surbrillance/";
+const HIGHLIGHT_COLOR = "#ff2bd6";
+let highlighting = Promise.resolve();
+let highlightIds: string[] = [];
+
+/** Repère, pour ce joueur seulement, les effets durables survolés dans la roue. */
+function highlightDurables(ids: string[]) {
+  highlighting = highlighting
+    .then(async () => {
+      if (highlightIds.length) await OBR.scene.local.deleteItems(highlightIds);
+      highlightIds = [];
+      if (!ids.length || !(await OBR.scene.isReady())) return;
+      const [entries, dpi, items] = await Promise.all([
+        OBR.scene.getMetadata().then(durablesIn),
+        OBR.scene.grid.getDpi(),
+        OBR.scene.items.getItems(),
+      ]);
+      const carriers = new Set(items.map(({ id }) => id));
+      const marks: Item[] = [];
+      for (const entry of entries.filter(({ id }) => ids.includes(id))) {
+        const carried = entry.carrier && carriers.has(entry.carrier.id);
+        const center = carried ? (await OBR.scene.items.getItemBounds([entry.carrier!.id])).center : entry.at;
+        const at = entry.offset ? { x: center.x + entry.offset.x, y: center.y + entry.offset.y } : center;
+        // Une marque blanche se perdrait dans un effet clair : une bande sombre et un trait vif ressortent partout.
+        const finish = <T extends { id(id: string): T; layer(layer: "POINTER"): T; zIndex(z: number): T; locked(value: boolean): T; disableHit(value: boolean): T; build(): Item }>(builder: T, part: string, z: number) =>
+          builder.id(`${HIGHLIGHT_PREFIX}${entry.id}/${part}`).layer("POINTER").zIndex(z).locked(true).disableHit(true).build();
+        if (entry.from) {
+          const line = (width: number, color: string, opacity: number) =>
+            buildLine().startPosition(entry.from!).endPosition(at).strokeColor(color).strokeOpacity(opacity).strokeWidth(width);
+          marks.push(finish(line(dpi * 0.8, "#000000", 0.55), "fond", Date.now()));
+          marks.push(finish(line(dpi * 0.18, HIGHLIGHT_COLOR, 1), "trait", Date.now() + 1));
+        } else {
+          const radius = Math.max(dpi * STYLES[entry.style].reach * entry.scale, dpi * 0.5);
+          const ring = (width: number, color: string, opacity: number) =>
+            buildShape().shapeType("CIRCLE").width(radius * 2).height(radius * 2).position(at).fillOpacity(0).strokeColor(color).strokeOpacity(opacity).strokeWidth(width);
+          marks.push(finish(ring(dpi * 0.3, "#000000", 0.6), "fond", Date.now()));
+          marks.push(finish(ring(dpi * 0.12, HIGHLIGHT_COLOR, 1), "trait", Date.now() + 1));
+        }
+      }
+      await OBR.scene.local.addItems(marks);
+      highlightIds = marks.map(({ id }) => id);
+    })
+    .catch(warn);
+}
+
 const saveDurables = (entries: DurableEntry[]) =>
   OBR.scene.setMetadata({ [FX_DURABLE_KEY]: entries });
 
@@ -1127,6 +1177,7 @@ async function placeDurable(
     at,
     ...(from ? { from } : {}),
     ...(carrier ? { carrier: { id: carrier.id, name: carrier.name } } : {}),
+    ...(aiming && carrier?.id !== aiming.token ? { caster: { token: aiming.token, spell: aiming.spell.name } } : {}),
     ...(carrier && placement ? { offset: placement.offset } : {}),
     ...(placement ? { angle: placement.angle } : {}),
     gmOnly: choice.gmOnly,
@@ -1138,7 +1189,7 @@ async function placeDurable(
 }
 
 /** Sort lancé depuis la roue, le temps de viser, et l'outil à retrouver ensuite. */
-let aiming: { spell: Favorite; tool: string; mode: string | undefined } | undefined;
+let aiming: { spell: Favorite; token: string; tool: string; mode: string | undefined } | undefined;
 
 /** Réglage à appliquer : le sort visé s'il y en a un, sinon celui du panneau. */
 function currentChoice(): FxChoice {
@@ -1196,9 +1247,9 @@ async function castFromToken(tokenId: string, spell: Favorite) {
     return;
   }
   const [tool, mode] = await Promise.all([OBR.tool.getActiveTool(), OBR.tool.getActiveToolMode()]);
-  aiming = { spell, tool: aiming?.tool ?? tool, mode: aiming ? aiming.mode : mode };
+  aiming = { spell, token: tokenId, tool: aiming?.tool ?? tool, mode: aiming ? aiming.mode : mode };
   await clearSource();
-  if (STYLES[spell.style].directed || startsOnFace(spell)) await markSource(token.center, token);
+  if (aimsFromToken(spell)) await markSource(token.center, token);
   await OBR.tool.activateTool(FX_TOOL_ID);
   await OBR.tool.activateMode(FX_TOOL_ID, MODE_ID);
 }
@@ -1396,6 +1447,12 @@ async function endAnchorDrag(event: ToolEvent) {
   await postToWindow({ type: "moved", index, anchor });
 }
 
+/** Un clic à la fois : pendant qu'il se traite, le suivant lirait un point de départ périmé. */
+let clicks = Promise.resolve();
+const queueClick = (event: ToolEvent) => {
+  clicks = clicks.then(() => handleClick(event)).catch(warn);
+};
+
 async function handleClick(event: ToolEvent) {
   if (picking) {
     const picked = await tokenUnderPointer(event);
@@ -1431,9 +1488,11 @@ async function handleClick(event: ToolEvent) {
   } else if (!source) {
     await markSource(point, token);
   } else if (source.x === point.x && source.y === point.y) {
-    // Recliquer sur le lanceur annule.
-    await clearSource();
-    await endAiming();
+    // Recliquer sur le lanceur annule, mais pas un clic répété, ni au milieu d'une chaîne.
+    if (choice.style !== "chaine" && performance.now() - sourceMarkedAt >= REPEATED_CLICK_MS) {
+      await clearSource();
+      await endAiming();
+    }
   } else if (isDurable(choice)) {
     const from = source;
     await placeDurable(choice, label, point, undefined, from);
@@ -1479,6 +1538,24 @@ async function arm() {
   await OBR.tool.activateMode(FX_TOOL_ID, MODE_ID);
 }
 
+/**
+ * Le panneau qui se charge juste après l'extension, c'est une page rechargée : personne n'a demandé à
+ * lancer. Au pire, qui l'ouvre dans ces quelques secondes clique sur Reprendre.
+ */
+const RELOAD_WINDOW_MS = 10_000;
+let bootedAt = 0;
+
+/** Owlbear peut remettre l'outil d'avant le rechargement, sans personne pour le lui avoir demandé ici. */
+async function releaseRestoredTool() {
+  if (armedFrom || aiming || picking) return;
+  if ((await OBR.tool.getActiveTool()) === FX_TOOL_ID) await OBR.tool.activateTool(OWLBEAR_MOVE_TOOL);
+}
+
+async function armOnLoad() {
+  if (performance.now() - bootedAt < RELOAD_WINDOW_MS) await releaseRestoredTool();
+  else await arm();
+}
+
 async function disarm() {
   if (!armedFrom) return;
   const { tool, mode } = armedFrom;
@@ -1495,6 +1572,12 @@ async function disarm() {
 
 const cancelAim = () => clearSource().then(endAiming).then(stopPicking);
 
+/** Une visée en cours s'annule ; sinon, on sort du mode lancer. */
+async function pressEscape() {
+  if (source || aiming || picking) await cancelAim();
+  else if (toolActive) await stopCasting();
+}
+
 /** Rend la main sans fermer le panneau. Sans outil à retrouver, on revient à celui de déplacement d'Owlbear. */
 async function stopCasting() {
   await clearSource();
@@ -1503,6 +1586,18 @@ async function stopCasting() {
     return;
   }
   if ((await OBR.tool.getActiveTool()) === FX_TOOL_ID) await OBR.tool.activateTool(OWLBEAR_MOVE_TOOL);
+}
+
+/** Cliquer en bougeant la souris, Owlbear le voit comme un glissé : c'est quand même un clic, là où il a commencé. */
+const CLICK_WHILE_MOVING_MS = 500;
+let pressStart: { event: ToolEvent; at: number; anchor: Promise<void> } | undefined;
+
+async function finishPress(event: ToolEvent) {
+  const press = pressStart;
+  pressStart = undefined;
+  await press?.anchor;
+  if (draggedAnchor !== undefined) await endAnchorDrag(event);
+  else if (press && performance.now() - press.at < CLICK_WHILE_MOVING_MS) queueClick(press.event);
 }
 
 async function createTool() {
@@ -1518,27 +1613,28 @@ async function createTool() {
     icons: [{ icon: "/vfx/outil.svg", label: t("tool.label"), filter: whenActive }],
     cursors: [{ cursor: "crosshair" }],
     onToolClick(_context, event) {
-      handleClick(event).catch(warn);
+      queueClick(event);
       return false;
     },
     onToolMove(_context, event) {
       updatePreview(event).catch(warn);
     },
     onToolDragStart(_context, event) {
-      startAnchorDrag(event).catch(warn);
+      pressStart = { event, at: performance.now(), anchor: startAnchorDrag(event).catch(warn) };
     },
     onToolDragMove(_context, event) {
       moveAnchorDrag(event);
     },
     onToolDragEnd(_context, event) {
-      endAnchorDrag(event).catch(warn);
+      finishPress(event).catch(warn);
     },
     onToolDragCancel() {
+      pressStart = undefined;
       cancelAnchorDrag().catch(warn);
     },
     onKeyDown(_context, event) {
       if (event.key === "Escape") {
-        cancelAim().catch(warn);
+        pressEscape().catch(warn);
       }
     },
     onActivate() {
@@ -1639,9 +1735,13 @@ async function castLimit(connectionId: string) {
 }
 
 export async function setupFx() {
+  bootedAt = performance.now();
   OBR.broadcast.onMessage(FX_UI_CHANNEL, ({ data }) => {
     const type = (data as { type?: string } | null)?.type;
     if (type === "arm") arm().catch(warn);
+    else if (type === "arm-on-load") armOnLoad().catch(warn);
+    else if (type === "escape") pressEscape().catch(warn);
+    else if (type === "highlight") highlightDurables(((data as { ids?: string[] }).ids ?? []).filter((id) => typeof id === "string"));
     else if (type === "language") applyLanguage().catch(warn);
     else if (type === "disarm") disarm().catch(warn);
     else if (type === "cancel-aim") cancelAim().catch(warn);
@@ -1703,6 +1803,9 @@ export async function setupFx() {
   durableLimit = limitsIn(room).durable;
   simultaneousLimit = limitsIn(room).simultaneous;
   syncTool();
+  toolSync.then(releaseRestoredTool).catch(warn);
+  // Owlbear peut remettre l'outil seulement une fois celui-ci recréé.
+  setTimeout(() => releaseRestoredTool().catch(warn), 2000);
   OBR.action.setTitle(t("app.title")).catch(warn);
   scheduleReconcile();
 }

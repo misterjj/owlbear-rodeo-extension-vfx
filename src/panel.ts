@@ -3,6 +3,10 @@ import {
   ELEMENT_IDS,
   FX_DURABLE_KEY,
   FX_SPELLS_KEY,
+  canChooseTarget,
+  defaultTarget,
+  spellTarget,
+  type SpellTarget,
   FX_TOOL_ID,
   FX_UI_CHANNEL,
   DEFAULT_LIMIT,
@@ -109,7 +113,7 @@ function hint() {
       choice.style === "mur"
         ? t("hint.wall")
         : choice.style === "chaine"
-        ? t("hint.chain")
+        ? t(aimingNow ? "hint.chainNext" : "hint.chain")
         : STYLES[choice.style].directed
         ? t("hint.directed")
         : t("hint.attach");
@@ -120,7 +124,7 @@ function hint() {
       ? t("hint.gmTeleport")
       : t("hint.gmOnly");
   }
-  if (choice.style === "chaine") return t("hint.chain");
+  if (choice.style === "chaine") return t(aimingNow ? "hint.chainNext" : "hint.chain");
   if (choice.style === "mur") return t("hint.wall");
   if (choice.style === "teleportation") return t("hint.teleport");
   return STYLES[choice.style].directed
@@ -134,7 +138,7 @@ function bannerHtml() {
     ? `<div class="hint">
          <p id="hint">${hint()}</p>
          <div class="hint-actions">
-           ${aimingNow ? `<button type="button" id="cancel-aim">${t("banner.cancelAim")}</button>` : ""}
+           ${aimingNow ? `<button type="button" id="cancel-aim">${t(choice.style === "chaine" ? "banner.finishChain" : "banner.cancelAim")}</button>` : ""}
            <button type="button" id="stop-cast">${t("banner.stop")}</button>
          </div>
        </div>`
@@ -301,17 +305,20 @@ function update(next: Partial<typeof choice>) {
   saveChoice(localStorage, choice);
 }
 
-/** Enregistre sur le token ; la liste affichée change aussitôt, puis suit la scène. */
-async function saveSpells(next: Favorite[]) {
+/**
+ * Enregistre sur le token ; la liste affichée change aussitôt, puis suit la scène. Le changement part
+ * de ce que le token contient à cet instant : la liste affichée a pu prendre du retard sur lui.
+ */
+async function saveSpells(change: (spells: Favorite[]) => Favorite[]) {
   if (!target) return;
   const { id } = target;
   const previous = target.spells;
-  target.spells = next;
+  target.spells = change(previous);
   try {
     await OBR.scene.items.updateItems(
       (item) => item.id === id,
       (drafts) => {
-        for (const draft of drafts) draft.metadata[FX_SPELLS_KEY] = next;
+        for (const draft of drafts) draft.metadata[FX_SPELLS_KEY] = change(spellsOf(draft.metadata));
       },
     );
   } catch (error) {
@@ -368,6 +375,10 @@ function spellEditHtml(spell: Favorite) {
           <option value="centre"${spell.onFace ? "" : " selected"}>${t("wheel.originCenter")}</option>
           <option value="face"${spell.onFace ? " selected" : ""}>${t("wheel.originFace")}</option>
         </select></label>
+        <label class="wide" id="spell-target-row">${t("wheel.target")}<select id="spell-target">
+          <option value="self"${spellTarget(spell) === "self" ? " selected" : ""}>${t("wheel.targetSelf")}</option>
+          <option value="aim"${spellTarget(spell) === "aim" ? " selected" : ""}>${t("wheel.targetAim")}</option>
+        </select></label>
         <label class="wide check" id="spell-durable-row"><input type="checkbox" id="spell-durable"${spell.durable ? " checked" : ""} /> ${t("wheel.durable")}</label>
         ${isSpellLit(spell) ? `<p class="note wide">${t("wheel.alreadyLit")}</p>` : ""}
         <p class="error wide" id="spell-error" hidden></p>
@@ -398,12 +409,22 @@ function bindSpellEdit(index: number, container: HTMLElement) {
     field("exact-row").hidden = !STYLES[style].exactZone;
     field("exact-label").innerHTML = `${t("zone.exact", { what: exactZoneLabel(style) })} (<span data-unit>${escapeHtml(unit)}</span>)`;
     field("origin-row").hidden = style !== "cube";
+    // Posé sur une face, le cube part forcément du token : il n'y a rien d'autre à choisir.
+    const onFace = style === "cube" && field<HTMLSelectElement>("origin").value === "face";
+    field("target-row").hidden = !canChooseTarget(style) || onFace;
   };
   showFieldsOfStyle();
-  styleField.onchange = showFieldsOfStyle;
+  styleField.onchange = () => {
+    field<HTMLSelectElement>("target").value = defaultTarget(styleField.value as StyleId);
+    showFieldsOfStyle();
+  };
+  field<HTMLSelectElement>("origin").onchange = showFieldsOfStyle;
   field<HTMLButtonElement>("cancel").onclick = close;
   form.onkeydown = (event) => {
-    if (event.key === "Escape") close();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+    }
   };
   form.oninput = () => {
     error.hidden = true;
@@ -414,8 +435,7 @@ function bindSpellEdit(index: number, container: HTMLElement) {
       error.textContent = message;
       error.hidden = false;
     };
-    const spells = target!.spells;
-    const next = editSpell(spells, index, {
+    const changes = {
       name: field<HTMLInputElement>("name").value,
       element: field<HTMLSelectElement>("element").value as ElementId,
       style: styleField.value as StyleId,
@@ -423,12 +443,14 @@ function bindSpellEdit(index: number, container: HTMLElement) {
       exact: field<HTMLInputElement>("exact").valueAsNumber,
       durable: field<HTMLInputElement>("durable").checked,
       onFace: field<HTMLSelectElement>("origin").value === "face",
-    });
-    if (next === spells) {
+      target: field<HTMLSelectElement>("target").value as SpellTarget,
+    };
+    const spells = target!.spells;
+    if (editSpell(spells, index, changes) === spells) {
       fail(t("wheel.nameTaken"));
       return;
     }
-    saveSpells(next)
+    saveSpells((current) => editSpell(current, index, changes))
       .then(close)
       .catch((reason) => {
         warn(reason);
@@ -504,7 +526,7 @@ function renderWheelSection() {
   container.querySelectorAll<HTMLButtonElement>("[data-remove-spell]").forEach((element) => {
     element.onclick = () => {
       const removed = Number(element.dataset.removeSpell);
-      saveSpells(target!.spells.filter((_, index) => index !== removed))
+      saveSpells((spells) => spells.filter((_, index) => index !== removed))
         .then(renderWheelSection)
         .catch(warn);
     };
@@ -515,7 +537,7 @@ function renderWheelSection() {
       event.preventDefault();
       const name = add.querySelector<HTMLInputElement>("#spell-new-name")!.value.trim() || defaultSpellName(choice);
       // Le réglage « MJ seulement » vaut pour la partie en cours, pas pour le sort.
-      saveSpells(addFavorite(target!.spells, name, { ...choice, gmOnly: false }, MAX_SPELLS))
+      saveSpells((spells) => addFavorite(spells, name, { ...choice, gmOnly: false }, MAX_SPELLS))
         .then(renderWheelSection)
         .catch(warn);
     };
@@ -625,6 +647,7 @@ function render() {
   if (saveForm) {
     saveForm.onkeydown = (event) => {
       if (event.key === "Escape") {
+        event.preventDefault();
         savingFavorite = false;
         render();
       }

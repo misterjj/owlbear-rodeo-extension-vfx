@@ -14,6 +14,14 @@ import {
   MAX_LIMIT,
   limitsIn,
   castTiming,
+  FX_DURABLE_KEY,
+  placedBySpell,
+  FX_SPELLS_KEY,
+  spellTarget,
+  canChooseTarget,
+  wheelInstances,
+  MAX_WHEEL_INSTANCES,
+  aimsFromToken,
   LEAVES_TRACE,
   type StyleId,
   othersLimit,
@@ -656,15 +664,29 @@ describe("effets durables", () => {
   });
 
   it("depuis la roue, n'attend un clic que s'il faut choisir un point", () => {
-    expect(firesFromToken({ style: "nuage", durable: true })).toBe(true);
-    expect(firesFromToken({ style: "pluie", durable: true })).toBe(true);
-    expect(firesFromToken({ style: "nuage" })).toBe(false);
-    expect(firesFromToken({ style: "mur", durable: true })).toBe(false);
-    // Durables, les effets qu'on envoie sur quelqu'un se visent toujours.
-    expect(firesFromToken({ style: "explosion", durable: true })).toBe(false);
-    expect(firesFromToken({ style: "coup", durable: true })).toBe(false);
-    expect(firesFromToken({ style: "rayon", durable: true })).toBe(false);
-    expect(firesFromToken({ style: "aura" })).toBe(true);
+    // Par défaut : les buffs partent du token, le reste se vise, quel que soit « durable ».
+    for (const style of ["aura", "dome", "soin", "transformation"] as const) {
+      expect(firesFromToken({ style })).toBe(true);
+      expect(firesFromToken({ style, target: "aim" })).toBe(false);
+    }
+    for (const style of ["pluie", "nuage", "flamme", "cube", "explosion", "meteore", "griffes", "coup", "morsure"] as const) {
+      expect(firesFromToken({ style })).toBe(false);
+      expect(firesFromToken({ style, target: "self" })).toBe(true);
+    }
+    // Un effet dirigé n'a pas ce choix.
+    for (const style of ["fleche", "rayon", "cone", "chaine", "projectile", "teleportation", "mur"] as const) {
+      expect(canChooseTarget(style)).toBe(false);
+      expect(firesFromToken({ style, target: "self" })).toBe(false);
+    }
+  });
+
+  it("garde la cible d'un sort, et l'oublie si son style n'en a pas", () => {
+    const spell = { name: "Bouclier", element: "force", style: "dome", size: "M", exact: null } as const;
+    expect(spellTarget(spell)).toBe("self");
+    expect(editSpell([spell], 0, { ...spell, target: "aim" })[0].target).toBe("aim");
+    expect(editSpell([spell], 0, { ...spell, style: "rayon", target: "aim" })[0].target).toBeUndefined();
+    expect(spellTarget({ style: "dome", target: "autre" as "aim" })).toBe("self");
+    expect(spellsOf({ [FX_SPELLS_KEY]: [{ ...spell, target: "aim" }] })[0].target).toBe("aim");
   });
 
   it("limite leur nombre et rend les ténèbres presque opaques", () => {
@@ -686,6 +708,39 @@ describe("manifest", () => {
   it("respecte la limite de description d'Owlbear", () => {
     const manifest = JSON.parse(readFileSync("public/manifest.json", "utf8"));
     expect(manifest.description.length).toBeLessThanOrEqual(128);
+  });
+});
+
+describe("effets posés par un sort de la roue", () => {
+  const entry = (id: string, caster?: { token: string; spell: string }) =>
+    ({ id, caster }) as unknown as Parameters<typeof placedBySpell>[0][number];
+
+  it("ne retrouve que ceux de ce sort, sur ce token", () => {
+    const entries = [entry("a", { token: "T", spell: "Mur" }), entry("b", { token: "T", spell: "Feu" }), entry("c", { token: "U", spell: "Mur" }), entry("d")];
+    expect(placedBySpell(entries, "T", "Mur").map(({ id }) => id)).toEqual(["a"]);
+    expect(placedBySpell(entries, "T", "Autre")).toEqual([]);
+  });
+
+  it("numérote dans l'ordre de lancement, et garde les plus récents sur la roue", () => {
+    const many = Array.from({ length: 12 }, (_, index) => entry(`e${index}`));
+    const shown = wheelInstances(many);
+    expect(shown).toHaveLength(MAX_WHEEL_INSTANCES);
+    expect(shown[0]).toMatchObject({ number: 4, entry: { id: "e3" } });
+    expect(shown.at(-1)).toMatchObject({ number: 12, entry: { id: "e11" } });
+  });
+
+  it("garde le lien à la relecture de la scène", () => {
+    const saved = { id: "a", name: "Mur", element: "feu", style: "mur", scale: 1, seed: 1, at: { x: 0, y: 0 }, gmOnly: false, owner: "p", caster: { token: "T", spell: "Mur" } };
+    expect(placedBySpell(durablesIn({ [FX_DURABLE_KEY]: [saved] }), "T", "Mur")).toHaveLength(1);
+  });
+});
+
+describe("sort de la roue qui demande de viser", () => {
+  it("part du token, sauf le mur, dont les deux points sont libres", () => {
+    for (const style of ["fleche", "rayon", "cone", "chaine", "projectile"] as const) expect(aimsFromToken({ style })).toBe(true);
+    expect(aimsFromToken({ style: "mur" })).toBe(false);
+    expect(aimsFromToken({ style: "explosion" })).toBe(false);
+    expect(aimsFromToken({ style: "cube", onFace: true })).toBe(true);
   });
 });
 
@@ -787,8 +842,8 @@ describe("cube sur une face", () => {
   });
 
   it("demande de viser depuis la roue, même durable", () => {
-    expect(firesFromToken({ style: "cube", durable: true })).toBe(true);
-    expect(firesFromToken({ style: "cube", durable: true, onFace: true })).toBe(false);
+    expect(firesFromToken({ style: "cube", target: "self" })).toBe(true);
+    expect(firesFromToken({ style: "cube", onFace: true })).toBe(false);
   });
 
   it("est gardé dans le réglage, les favoris et les sorts, puis oublié pour un autre style", () => {

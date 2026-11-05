@@ -30,7 +30,8 @@ const TABS: { id: Tab; label: TextKey; gmOnly: boolean }[] = [
   { id: "settings", label: "tab.settings", gmOnly: false },
 ];
 
-function showTab(next: Tab) {
+/** Affiche l'onglet sans toucher à l'outil : qui a arrêté de lancer ne doit pas s'y retrouver sans le vouloir. */
+function renderTab(next: Tab) {
   tab = TABS.some(({ id, gmOnly }) => id === next && (isGm || !gmOnly)) ? next : "cast";
   localStorage.setItem(TAB_KEY, tab);
   app.querySelectorAll<HTMLElement>("[data-pane]").forEach((pane) => {
@@ -39,6 +40,10 @@ function showTab(next: Tab) {
   app.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((button) => {
     button.setAttribute("aria-selected", String(button.dataset.tab === tab));
   });
+}
+
+function showTab(next: Tab) {
+  renderTab(next);
   // L'onglet Lancer est prêt à viser dès qu'on y arrive ; les autres rendent l'outil d'avant.
   post(tab === "cast" ? "arm" : "disarm");
 }
@@ -60,7 +65,7 @@ function renderNav() {
     setCastCompact(compact);
     setProgramsCompact(compact);
     renderNav();
-    showTab(tab);
+    renderTab(tab);
   };
 }
 
@@ -125,8 +130,14 @@ OBR.onReady(async () => {
     tab = "cast";
     await targetToken(pending, true);
   }
-  showTab(tab);
+  renderTab(tab);
+  // Venir d'une roue est une demande ; une page rechargée n'en est pas une.
+  post(tab === "cast" ? (pending ? "arm" : "arm-on-load") : "disarm");
   followHeight(pane("shell"));
+  document.addEventListener("keydown", (event) => {
+    // Le clavier reste dans cette fenêtre tant qu'on n'a pas cliqué sur la carte.
+    if (event.key === "Escape" && !event.defaultPrevented) post("escape");
+  });
 
   OBR.broadcast.onMessage(FX_UI_CHANNEL, ({ data }) => {
     const message = data as { type?: string; token?: unknown } | null;
@@ -147,8 +158,10 @@ OBR.onReady(async () => {
     showTab(tab);
   });
   OBR.room.onMetadataChange((next) => {
+    const newlyAllowed = !isGm && !playersAllowed && playersAllowedIn(next);
     playersAllowed = playersAllowedIn(next);
     renderAccess();
-    if (isGm || playersAllowed) showTab(tab);
+    if (newlyAllowed) showTab(tab);
+    else if (isGm || playersAllowed) renderTab(tab);
   });
 });

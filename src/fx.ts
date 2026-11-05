@@ -522,7 +522,11 @@ export interface Favorite extends FxCast {
   exact: number | null;
   durable?: boolean;
   onFace?: boolean;
+  /** Sur la roue : part du token, ou attend qu'on vise un token ou la carte. */
+  target?: SpellTarget;
 }
+
+export type SpellTarget = "self" | "aim";
 
 const isFavorite = (value: unknown): value is Favorite => {
   const favorite = value as Partial<Favorite> | null;
@@ -677,7 +681,7 @@ export function renameSpell(spells: Favorite[], index: number, name: string): Fa
 export function editSpell(spells: Favorite[], index: number, changes: Favorite): Favorite[] {
   const renamed = renameSpell(spells, index, changes.name);
   if (renamed === spells) return spells;
-  const { element, style, size, exact } = changes;
+  const { element, style, size, exact, target } = changes;
   return renamed.map((spell, i) =>
     i === index
       ? {
@@ -688,6 +692,7 @@ export function editSpell(spells: Favorite[], index: number, changes: Favorite):
           exact: STYLES[style].exactZone && isExact(exact) ? exact : null,
           ...(isDurable(changes) ? { durable: true } : {}),
           ...(startsOnFace(changes) ? { onFace: true } : {}),
+          ...(canChooseTarget(style) && target ? { target } : {}),
         }
       : spell,
   );
@@ -699,6 +704,19 @@ export const defaultSpellName = ({ element, style }: FxCast) =>
 /** Ces styles partent du token sans qu'il y ait à viser. */
 export const castsOnSelf = (style: StyleId) =>
   style === "aura" || style === "soin" || style === "dome" || style === "transformation";
+
+/** Un effet dirigé se vise toujours ; les autres peuvent partir du lanceur ou aller sur quelqu'un d'autre. */
+export const canChooseTarget = (style: StyleId) => !STYLES[style].directed;
+
+export const defaultTarget = (style: StyleId): SpellTarget => (castsOnSelf(style) ? "self" : "aim");
+
+/** Les sorts enregistrés avant ce réglage prennent la valeur habituelle de leur style. */
+export const spellTarget = ({ style, target }: { style: StyleId; target?: SpellTarget }): SpellTarget =>
+  target === "self" || target === "aim" ? target : defaultTarget(style);
+
+/** Depuis un token, le premier point est le token. Un mur, lui, se trace où l'on veut. */
+export const aimsFromToken = (spell: { style: StyleId; onFace?: boolean }) =>
+  startsOnFace(spell) || (STYLES[spell.style].directed && spell.style !== "mur");
 
 export interface WheelCast {
   token: string;
@@ -857,6 +875,8 @@ export interface DurableEntry {
   from?: Point;
   /** Token porteur : l'effet le suit. */
   carrier?: { id: string; name: string };
+  /** Sort de la roue qui l'a posé ailleurs que sur son token : la roue peut l'arrêter. */
+  caster?: { token: string; spell: string };
   /** Décalage depuis le centre du porteur et rotation, pour un cube collé à sa face. */
   offset?: Point;
   angle?: number;
@@ -904,6 +924,17 @@ export function durablesIn(metadata: Record<string, unknown>): DurableEntry[] {
  * Même effet déjà attaché à ce token : un nouveau clic sert à l'éteindre.
  * L'effet d'un programme ne compte pas : les lancers à la main n'y touchent pas.
  */
+/** Ce que ce sort de la roue a déjà posé ailleurs que sur son token. */
+export const placedBySpell = (entries: DurableEntry[], token: string, spell: string) =>
+  entries.filter(({ caster }) => caster?.token === token && caster.spell === spell);
+
+/** Assez pour rester lisible sur la roue, avec Nouveau, Tout arrêter et Annuler. */
+export const MAX_WHEEL_INSTANCES = 9;
+
+/** Les plus récents, numérotés dans l'ordre où ils ont été lancés. */
+export const wheelInstances = (placed: DurableEntry[]) =>
+  placed.map((entry, index) => ({ entry, number: index + 1 })).slice(-MAX_WHEEL_INSTANCES);
+
 export const sameDurable = (entry: DurableEntry, { element, style }: FxCast) =>
   !entry.program && entry.element === element && entry.style === style;
 
@@ -984,8 +1015,7 @@ export function durableChanges(
 }
 
 /** Durables, ces zones restent sur le lanceur. Une explosion ou un coup durable se vise, comme d'habitude. */
-const DURABLE_ON_CASTER: readonly StyleId[] = ["pluie", "cube", "nuage", "flamme"];
 
 /** La durée d'un sort lancé depuis la roue : on ne vise que s'il y a un point à choisir. */
-export const firesFromToken = (spell: { style: StyleId; durable?: boolean; onFace?: boolean }) =>
-  !startsOnFace(spell) && (castsOnSelf(spell.style) || (isDurable(spell) && DURABLE_ON_CASTER.includes(spell.style)));
+export const firesFromToken = (spell: { style: StyleId; onFace?: boolean; target?: SpellTarget }) =>
+  !startsOnFace(spell) && canChooseTarget(spell.style) && spellTarget(spell) === "self";
