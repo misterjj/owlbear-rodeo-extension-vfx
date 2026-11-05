@@ -899,8 +899,10 @@ export interface DurableEntry {
   from?: Point;
   /** Token porteur : l'effet le suit. */
   carrier?: { id: string; name: string };
-  /** Sort de la roue qui l'a posé ailleurs que sur son token : la roue peut l'arrêter. */
-  caster?: { token: string; spell: string };
+  /** Sort de la roue qui l'a lancé. S'il est ailleurs que sur ce token, la roue peut l'arrêter. */
+  caster?: { token: string; spell: string; name?: string };
+  /** Nom du joueur au moment du lancer. */
+  ownerName?: string;
   /** Décalage depuis le centre du porteur et rotation, pour un cube collé à sa face. */
   offset?: Point;
   angle?: number;
@@ -950,7 +952,16 @@ export function durablesIn(metadata: Record<string, unknown>): DurableEntry[] {
  */
 /** Ce que ce sort de la roue a déjà posé ailleurs que sur son token. */
 export const placedBySpell = (entries: DurableEntry[], token: string, spell: string) =>
-  entries.filter(({ caster }) => caster?.token === token && caster.spell === spell);
+  entries.filter(({ caster, carrier }) => caster?.token === token && caster.spell === spell && carrier?.id !== token);
+
+export type EntryOrigin = { kind: "program" } | { kind: "wheel"; name?: string } | { kind: "hand"; name: string };
+
+/** D'où vient cet effet, pour la liste. Un effet d'avant ce suivi peut ne rien dire de lui-même. */
+export function entryOrigin({ program, caster, ownerName }: DurableEntry): EntryOrigin | undefined {
+  if (program) return { kind: "program" };
+  if (caster) return { kind: "wheel", ...(typeof caster.name === "string" ? { name: caster.name } : {}) };
+  return typeof ownerName === "string" && ownerName ? { kind: "hand", name: ownerName } : undefined;
+}
 
 /** Assez pour rester lisible sur la roue, avec Nouveau, Tout arrêter et Annuler. */
 export const MAX_WHEEL_INSTANCES = 9;

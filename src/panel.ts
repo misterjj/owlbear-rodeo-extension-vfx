@@ -4,6 +4,7 @@ import {
   FX_DURABLE_KEY,
   FX_SPELLS_KEY,
   canChooseTarget,
+  entryOrigin,
   hasDirection,
   defaultTarget,
   spellTarget,
@@ -47,7 +48,7 @@ import {
 } from "./fx";
 import { directionField, readDirectionField } from "./direction-field";
 import { elementGrid, elementValue, pickerRow, sizeRow, styleGrid, swatch } from "./effect-fields";
-import { FX_PROGRAM_CHANNEL } from "./fx-programs";
+import { FX_PROGRAM_CHANNEL, programsIn, type Program } from "./fx-programs";
 import { LANGUAGES, LANGUAGE_NAMES, languageSetting, setLanguageSetting, t, type Language } from "./i18n";
 import { watchSceneUnit } from "./scene-unit";
 
@@ -59,6 +60,8 @@ let isGm = false;
 let playersAllowed = false;
 let unit = "cases";
 let running: DurableEntry[] = [];
+/** Pour nommer le programme d'origine d'un effet : son nom et son groupe ont pu changer depuis son tir. */
+let programs: Program[] = [];
 let limits: FxLimits = { durable: DEFAULT_LIMIT, programs: DEFAULT_LIMIT, simultaneous: DEFAULT_LIMIT };
 let compact = false;
 let toolActive = false;
@@ -270,16 +273,42 @@ function durableRow() {
   return `<label class="option durable"><input id="durable" type="checkbox" ${choice.durable ? "checked" : ""} /> ${t("options.durableLong")}</label>`;
 }
 
+const highlightOnMap = (ids: string[]) =>
+  OBR.broadcast.sendMessage(FX_UI_CHANNEL, { type: "highlight", ids }, { destination: "LOCAL" }).catch(warn);
+
+function showOnMapWhileHovered(element: HTMLElement, ids: string[]) {
+  element.addEventListener("pointerenter", () => highlightOnMap(ids));
+  element.addEventListener("pointerleave", () => highlightOnMap([]));
+  element.addEventListener("focus", () => highlightOnMap(ids));
+  element.addEventListener("blur", () => highlightOnMap([]));
+}
+
+function originLabel(entry: DurableEntry) {
+  const origin = entryOrigin(entry);
+  if (origin?.kind === "program") {
+    const program = programs.find(({ id }) => id === entry.program?.id);
+    if (!program) return t("running.fromProgram");
+    const named = t("running.fromProgramNamed", { name: escapeHtml(program.name) });
+    return program.group ? `${named} · ${t("running.inGroup", { group: escapeHtml(program.group) })}` : named;
+  }
+  if (origin?.kind === "wheel") return origin.name ? t("running.fromToken", { name: escapeHtml(origin.name) }) : t("running.fromTokenAny");
+  return origin ? t("running.fromHand", { name: escapeHtml(origin.name) }) : "";
+}
+
 function runningList() {
   if (!running.length) return "";
   const list = `
       ${running
         .map(
-          ({ id, name, carrier }) => `
+          (entry) => {
+            const { id, name, carrier } = entry;
+            const origin = originLabel(entry);
+            return `
             <div class="running">
-              <span>${escapeHtml(name)} <small>${carrier ? t("running.onToken", { name: escapeHtml(carrier.name) }) : t("running.onMap")}</small></span>
+              <span>${escapeHtml(name)} ${carrier ? `<small>${t("running.onToken", { name: escapeHtml(carrier.name) })}</small>` : ""}${origin ? `<small class="origin">${origin}</small>` : ""}</span>
               <button type="button" data-stop="${escapeHtml(id)}" aria-label="${t("action.removeNamed", { name: escapeHtml(name) })}" title="${t("action.remove")}">✕</button>
-            </div>`,
+            </div>`;
+          },
         )
         .join("")}
       ${running.length > 1 ? `<button type="button" class="stop-all" id="stop-all">${t("running.removeAll")}</button>` : ""}`;
@@ -301,14 +330,25 @@ function renderRunning() {
   container.innerHTML = runningList();
   bindFolds(container);
   container.querySelectorAll<HTMLButtonElement>("[data-stop]").forEach((element) => {
-    element.onclick = () => stopDurables([element.dataset.stop!]).catch(warn);
+    element.onclick = () => {
+      highlightOnMap([]);
+      stopDurables([element.dataset.stop!]).catch(warn);
+    };
+    showOnMapWhileHovered(element, [element.dataset.stop!]);
   });
   const stopAll = container.querySelector<HTMLButtonElement>("#stop-all");
-  if (stopAll) stopAll.onclick = () => stopDurables(running.map(({ id }) => id)).catch(warn);
+  if (stopAll) {
+    stopAll.onclick = () => {
+      highlightOnMap([]);
+      stopDurables(running.map(({ id }) => id)).catch(warn);
+    };
+    showOnMapWhileHovered(stopAll, running.map(({ id }) => id));
+  }
 }
 
 function readRunning(metadata: Metadata) {
   running = durablesIn(metadata).filter(({ owner }) => isGm || owner === OBR.player.id);
+  programs = programsIn(metadata);
   renderRunning();
 }
 

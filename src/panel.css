@@ -100,6 +100,7 @@ input:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
 .running { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; font-size: 12px; }
 .running span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .running small { color: #a9adbd; }
+.running small.origin { display: block; font-size: 11px; }
 .running button, .stop-all {
   all: unset; box-sizing: border-box; min-height: 24px; padding: 2px 7px; border-radius: 6px; cursor: pointer;
   background: rgb(255 255 255 / 0.1); font-size: 12px;

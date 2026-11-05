@@ -16,6 +16,7 @@ import {
   castTiming,
   FX_DURABLE_KEY,
   placedBySpell,
+  entryOrigin,
   directionAngle,
   FX_SPELLS_KEY,
   spellTarget,
@@ -748,6 +749,21 @@ describe("effets posés par un sort de la roue", () => {
     const entries = [entry("a", { token: "T", spell: "Mur" }), entry("b", { token: "T", spell: "Feu" }), entry("c", { token: "U", spell: "Mur" }), entry("d")];
     expect(placedBySpell(entries, "T", "Mur").map(({ id }) => id)).toEqual(["a"]);
     expect(placedBySpell(entries, "T", "Autre")).toEqual([]);
+  });
+
+  it("ignore un effet resté sur le token du sort : un clic sur le secteur l'éteint", () => {
+    const onItself = { ...entry("a", { token: "T", spell: "Mur" }), carrier: { id: "T", name: "Héros" } };
+    const onAlly = { ...entry("b", { token: "T", spell: "Mur" }), carrier: { id: "U", name: "Allié" } };
+    expect(placedBySpell([onItself, onAlly], "T", "Mur").map(({ id }) => id)).toEqual(["b"]);
+  });
+
+  it("dit d'où vient un effet", () => {
+    const base = entry("a");
+    expect(entryOrigin({ ...base, program: { id: "p", slot: "0" }, ownerName: "MJ" })).toEqual({ kind: "program" });
+    expect(entryOrigin({ ...base, caster: { token: "T", spell: "Mur", name: "Héros" } })).toEqual({ kind: "wheel", name: "Héros" });
+    expect(entryOrigin({ ...base, caster: { token: "T", spell: "Mur" } })).toEqual({ kind: "wheel" });
+    expect(entryOrigin({ ...base, ownerName: "Alice" })).toEqual({ kind: "hand", name: "Alice" });
+    expect(entryOrigin(base)).toBeUndefined();
   });
 
   it("numérote dans l'ordre de lancement, et garde les plus récents sur la roue", () => {

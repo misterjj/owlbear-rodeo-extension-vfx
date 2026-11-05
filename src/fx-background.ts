@@ -1154,6 +1154,7 @@ async function placeDurable(
   token: TokenArea | undefined,
   from?: Point,
   placement?: { offset: Point; angle: number },
+  fromWheel?: { token: string; spell: string },
 ) {
   const carrier = token && (await canMove(token)) ? token : undefined;
   const [metadata, multiplier] = await Promise.all([OBR.scene.getMetadata(), cellValue()]);
@@ -1172,6 +1173,9 @@ async function placeDurable(
     return;
   }
   const leavesTrace = LEAVES_TRACE.includes(choice.style);
+  const wheel = fromWheel ?? (aiming ? { token: aiming.token, spell: aiming.spell.name } : undefined);
+  const casterName = wheel && (await loadTokenAreas()).find(({ id }) => id === wheel.token)?.name;
+  const ownerName = await OBR.player.getName();
   const scale = effectScale(choice.style, choice.size, exactCells(choice, multiplier));
   const dpi = await OBR.scene.grid.getDpi();
   const entry: DurableEntry = {
@@ -1185,7 +1189,8 @@ async function placeDurable(
     at,
     ...(from ? { from } : {}),
     ...(carrier ? { carrier: { id: carrier.id, name: carrier.name } } : {}),
-    ...(aiming && carrier?.id !== aiming.token ? { caster: { token: aiming.token, spell: aiming.spell.name } } : {}),
+    ...(wheel ? { caster: { ...wheel, ...(casterName ? { name: casterName } : {}) } } : {}),
+    ...(ownerName ? { ownerName } : {}),
     ...(carrier && placement ? { offset: placement.offset } : {}),
     ...directionAngle(choice),
     ...(placement ? { angle: placement.angle } : {}),
@@ -1250,7 +1255,7 @@ async function castFromToken(tokenId: string, spell: Favorite) {
   if (firesFromToken(spell) || lit) {
     const choice = { ...currentChoice(), ...spell, durable: spell.durable === true, direction: spell.direction };
     if (isDurable(choice)) {
-      await placeDurable(choice, spell.name, token.center, token);
+      await placeDurable(choice, spell.name, token.center, token, undefined, undefined, { token: tokenId, spell: spell.name });
     } else {
       send(buildMessage(choice, token.center, undefined, await cellValue(), randomSeed()));
     }

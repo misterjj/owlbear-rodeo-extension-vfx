@@ -52,7 +52,9 @@ visible to people who join during the game. Each style lasts in its own way:
 - Clicking a token attaches it: it follows the token and disappears with it. Clicking again turns it off.
 - Clicking the map places it there. Effects with two points (wall, beam, cone…) take two clicks and always stay
   on the map. A lasting chain leaves one effect per jump, until `Escape`.
-- The **Lasting effects** list removes them one by one or all at once (10 per scene at most by default).
+- The **Lasting effects** list shows the token carrying each one, and where it comes from (a program and its group, a
+  token's spell, or the player who cast it). It removes them one by one or all at once (10 per scene at most by default), and hovering
+  a remove button highlights what it would remove.
 
 A lasting spell attached to its token turns on and off with a click on its sector. If it was placed elsewhere, such
 as a wall, the sector lights up and a click opens a second wheel: **New**, each active effect by number (hovering one
