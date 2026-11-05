@@ -238,7 +238,7 @@ function exactRow() {
   return `
     <label class="exact">
       ${t("zone.exact", { what })}
-      <input id="exact" type="number" min="0" step="any" value="${choice.exact ?? ""}" />
+      <input id="exact" type="number" min="0" step="any" data-clearable value="${choice.exact ?? ""}" />
       <span data-unit>${escapeHtml(unit)}</span>
     </label>`;
 }
@@ -370,7 +370,7 @@ function spellEditHtml(spell: Favorite) {
         <label>${t("field.element")}<select id="spell-element">${options(ELEMENT_IDS, elementLabel, spell.element)}</select></label>
         <label>${t("field.style")}<select id="spell-style">${options(STYLE_IDS, styleLabel, spell.style)}</select></label>
         <label>${t("field.size")}<select id="spell-size">${options(SIZE_IDS, (id) => id, spell.size)}</select></label>
-        <label id="spell-exact-row"><span id="spell-exact-label"></span><input type="number" id="spell-exact" min="0" step="any" value="${spell.exact ?? ""}" /></label>
+        <label id="spell-exact-row"><span id="spell-exact-label"></span><input type="number" id="spell-exact" min="0" step="any" data-clearable value="${spell.exact ?? ""}" /></label>
         <label class="wide" id="spell-origin-row">${t("wheel.origin")}<select id="spell-origin">
           <option value="centre"${spell.onFace ? "" : " selected"}>${t("wheel.originCenter")}</option>
           <option value="face"${spell.onFace ? " selected" : ""}>${t("wheel.originFace")}</option>

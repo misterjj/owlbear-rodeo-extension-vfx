@@ -148,3 +148,27 @@ h3 { margin: 7px 0 3px; font-size: 10.5px; font-weight: 500; letter-spacing: 0.0
 .limit { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; font-size: 12px; }
 .limit input { width: 72px; }
 .warning { margin: 6px 0; padding: 6px 8px; border-radius: 6px; background: rgb(255 180 80 / 0.16); color: #ffd9a8; font-size: 12px; }
+
+/* Des boutons − et + à la place des petites flèches du navigateur, plus faciles à viser, surtout au doigt. */
+input[type="number"] { appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.stepper { display: flex; align-items: stretch; width: 100%; min-width: 0; margin-top: 2px; }
+.stepper input[type="number"] {
+  flex: 1; width: 100%; min-width: 24px; margin: 0; padding: 2px; border-radius: 0; border-inline: 0; text-align: center;
+}
+.stepper .step {
+  all: unset; box-sizing: border-box; flex: none; display: grid; place-items: center; width: 26px; min-height: 28px;
+  background: rgb(255 255 255 / 0.12); font-size: 14px; font-weight: 600; cursor: pointer; touch-action: manipulation;
+}
+.stepper .step:first-child { border-radius: 6px 0 0 6px; }
+.stepper .step:last-child { border-radius: 0 6px 6px 0; }
+.stepper .step:hover { background: rgb(255 255 255 / 0.22); }
+.stepper .step:active { background: rgb(187 153 255 / 0.45); }
+.exact .stepper, .limit .stepper, .inline .stepper { flex: none; width: 112px; margin-top: 0; }
+.exact .stepper { margin-left: auto; }
+@media (pointer: coarse) {
+  .stepper .step { width: 36px; min-height: 36px; font-size: 18px; }
+  .stepper input[type="number"] { height: auto; }
+  .exact .stepper, .limit .stepper, .inline .stepper { width: 136px; }
+}

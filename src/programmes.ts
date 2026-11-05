@@ -389,13 +389,13 @@ function renderForm() {
       ${pickerRow("style", t("field.style"), styleLabel(d.style), openPicker === "style")}
       ${openPicker === "style" ? styleGrid(d.style) : ""}
       ${sizeRow(d.size, usesExact)}
-      ${zone ? `<label class="inline"><span>${t("zone.exact", { what: exactZoneLabel(d.style) })} (<span data-unit>${escapeHtml(unit)}</span>)</span><input id="exact" type="number" min="0" step="any" value="${d.exact ?? ""}" /></label>` : ""}
+      ${zone ? `<label class="inline"><span>${t("zone.exact", { what: exactZoneLabel(d.style) })} (<span data-unit>${escapeHtml(unit)}</span>)</span><input id="exact" type="number" min="0" step="any" data-clearable value="${d.exact ?? ""}" /></label>` : ""}
       <h2>${t("program.rhythm")}</h2>
       <div class="fields">
         <label>${t("program.minInterval")}<input id="min" type="number" min="${MIN_INTERVAL}" step="0.1" value="${d.min}" /></label>
         <label>${t("program.maxInterval")}<input id="max" type="number" min="${MIN_INTERVAL}" step="0.1" value="${d.max}" /></label>
         <label>${t("program.firstShot")}<input id="offset" type="number" min="0" step="0.1" value="${d.offset}" /></label>
-        <label>${t("program.shotsField")}<input id="shots" type="number" min="1" step="1" value="${d.shots ?? ""}" /></label>
+        <label>${t("program.shotsField")}<input id="shots" type="number" min="1" step="1" data-clearable value="${d.shots ?? ""}" /></label>
       </div>
       ${d.group ? `<p class="note">${t("program.offsetNote")}</p>` : ""}
       <label class="permanent"><input id="permanent" type="checkbox" ${d.permanent ? "checked" : ""} /> ${t("program.permanent")}</label>
