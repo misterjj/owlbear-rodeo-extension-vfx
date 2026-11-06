@@ -11,7 +11,7 @@ import { STYLE_ICONS } from "./fx-icons";
 /** Liens à renseigner. Vide : le bouton reste visible et signale qu'il arrive bientôt. */
 const LINKS: Record<string, string> = {
   store: "",
-  patreon: "",
+  patreon: "https://www.patreon.com/misterjj_obr",
 };
 
 /** La page est en anglais, ou en français sous /fr/. Les noms viennent du dictionnaire de l'extension. */
@@ -402,19 +402,46 @@ for (const a of document.querySelectorAll<HTMLAnchorElement>("a[data-link]")) {
   }
 }
 
-// --- Clips : un emplacement tant que la vidéo n'existe pas ---------------------
+// --- Clips : chargés à l'approche, joués seulement quand ils sont à l'écran ---------
 
-for (const fig of document.querySelectorAll<HTMLElement>("figure.clip")) {
-  const src = fig.dataset.src;
+const clips = new Map<HTMLElement, HTMLVideoElement>();
+const visible = new Set<HTMLElement>();
+const clipObserver = new IntersectionObserver(
+  (entries) => {
+    for (const { target, isIntersecting } of entries) {
+      const fig = target as HTMLElement;
+      let video = clips.get(fig);
+      if (!isIntersecting) {
+        visible.delete(fig);
+        video?.pause();
+        continue;
+      }
+      visible.add(fig);
+      if (!video) {
+        video = document.createElement("video");
+        Object.assign(video, { muted: true, loop: true, playsInline: true, preload: "auto" });
+        video.setAttribute("aria-hidden", "true");
+        // La vidéo charge hors de la page, l'emplacement reste là jusqu'à la première image.
+        const slot = fig.querySelector(".slot");
+        const loaded = video;
+        video.addEventListener("loadeddata", () => {
+          slot?.replaceWith(loaded);
+          if (visible.has(fig)) loaded.play().catch(() => {});
+        }, { once: true });
+        video.src = fig.dataset.src!;
+        clips.set(fig, video);
+      }
+      video.play().catch(() => {});
+    }
+  },
+  { rootMargin: "300px 0px" },
+);
+
+for (const fig of document.querySelectorAll<HTMLElement>("figure.clip[data-src]")) {
   const slot = document.createElement("div");
   slot.className = "slot";
-  slot.innerHTML = `<span>${src?.split("/").pop() ?? ""}</span>`;
   fig.prepend(slot);
-  if (!src) continue;
-  const video = document.createElement("video");
-  Object.assign(video, { muted: true, loop: true, autoplay: true, playsInline: true, preload: "metadata" });
-  video.addEventListener("loadeddata", () => slot.replaceWith(video));
-  video.src = src;
+  clipObserver.observe(fig);
 }
 
 // --- Copie de l'adresse du manifest ----------------------------------------------
