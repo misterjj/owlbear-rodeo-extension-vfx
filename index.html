@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spellcast FX · Spell effects for Owlbear Rodeo</title>
+    <meta name="description" content="Animated spell effects for Owlbear Rodeo: strikes, arrows, spells and explosions, cast by the GM or players, seen by the whole room." />
+    <link rel="alternate" hreflang="en" href="https://vfx-owlbear.pages.dev/" />
+    <link rel="alternate" hreflang="fr" href="https://vfx-owlbear.pages.dev/fr/" />
+    <link rel="icon" href="/icon.svg" />
+    <link rel="stylesheet" href="/src/guide.css" />
+  </head>
+  <body>
+    <canvas id="embers" aria-hidden="true"></canvas>
+
+    <header class="top">
+      <a class="brand" href="#"><img src="/icon.svg" alt="" /> Spellcast FX</a>
+      <nav>
+        <a href="#grimoire">Grimoire</a>
+        <a href="#cast">Cast</a>
+        <a href="#lasting">Lasting</a>
+        <a href="#tokens">Token spells</a>
+        <a href="#programs">Programs</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="lang" href="/fr/" hreflang="fr" lang="fr" title="Version française">FR</a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-label="Menu"><span></span></button>
+      <a class="button small primary" href="#install">Install</a>
+    </header>
+
+    <section class="hero">
+      <canvas id="sky" aria-hidden="true"></canvas>
+      <div class="hero-inner">
+        <div class="hero-text">
+          <p class="kicker">Extension for Owlbear Rodeo</p>
+          <h1>Make every spell<br /><span class="spark">land.</span></h1>
+          <p class="lead">
+            Fireballs that roar, lightning that jumps from foe to foe, walls of ice that stay on the map.
+            Cast them in one click, the whole table sees them.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="#install">Add it to your room</a>
+            <a class="button ghost" href="#cast">See how it works</a>
+          </div>
+          <p class="hint"><span class="on-mouse">Click</span><span class="on-touch">Tap</span> anywhere around here to cast <span id="current-element">Fire</span>.</p>
+        </div>
+        <figure class="clip portal" data-src="/guide/media/hero.mp4"></figure>
+      </div>
+      <a class="scroll" href="#grimoire" aria-label="Scroll down"></a>
+    </section>
+
+    <section id="grimoire" class="band">
+      <div class="wrap">
+        <header class="chapter-head center">
+          <p class="kicker">The grimoire</p>
+          <h2>16 elements × 20 styles</h2>
+          <p class="sub">Pick an element, then a style: it plays right here, with the extension's own effects. Click the map to aim it yourself.</p>
+        </header>
+        <div id="elements" class="elements"></div>
+        <div class="forge">
+          <div class="stage" id="stage">
+            <canvas id="stage-canvas"></canvas>
+            <div class="token caster" style="--x: 3.5; --y: 4.5"><span>W</span><em>Wizard</em></div>
+            <div class="token foe" style="--x: 11.5; --y: 3.5"><span>O</span><em>Ogre</em></div>
+            <div class="token foe" style="--x: 13; --y: 6.5"><span>G</span><em>Goblin</em></div>
+            <p class="stage-label" id="stage-label"></p>
+          </div>
+          <div id="styles" class="styles"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="cast" class="chapter">
+      <div class="wrap split">
+        <div class="text">
+          <p class="numeral">I</p>
+          <h2>Cast in one click</h2>
+          <p class="sub">Open the panel, pick an effect, click the map. An outline shows the area before it hits.</p>
+          <ul class="runes">
+            <li><strong>One click</strong> for explosions, domes, auras, healing…</li>
+            <li><strong>Two clicks</strong> for arrows, beams, cones and walls: from here, to there.</li>
+            <li><strong>Chains</strong> jump to every target you click, until <kbd>Esc</kbd> or <em>Finish chain</em>.</li>
+            <li><strong>Strikes and claws</strong> hit at random angles, or at the exact angle you set.</li>
+          </ul>
+        </div>
+        <figure class="clip" data-src="/guide/media/cast-panel.mp4">
+          <figcaption>Pick an effect in the panel, aim, cast</figcaption>
+        </figure>
+      </div>
+      <div class="wrap duo">
+        <figure class="clip" data-src="/guide/media/chain.mp4"><figcaption>A chain jumping between targets</figcaption></figure>
+        <figure class="clip" data-src="/guide/media/direction.mp4"><figcaption>Claws at a fixed angle</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="lasting" class="chapter reverse">
+      <div class="wrap split">
+        <div class="text">
+          <p class="numeral">II</p>
+          <h2>Effects that stay</h2>
+          <p class="sub">Check <em>Lasting</em>, and the effect remains until you remove it, even for players who join later.</p>
+          <ul class="runes">
+            <li>Drop it on a token and it follows: a burning aura, a shield, a curse.</li>
+            <li>Leave it on the map: a wall of fire, a dome of darkness, a poison cloud.</li>
+            <li>Arrows, claws and explosions leave a trace: a planted arrow, scorched ground.</li>
+            <li>The list shows who cast what. Hover ✕ to see it on the map before removing it.</li>
+          </ul>
+        </div>
+        <figure class="clip" data-src="/guide/media/lasting.mp4">
+          <figcaption>Place a wall, then remove it from the list</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="tokens" class="chapter">
+      <div class="wrap split">
+        <div class="text">
+          <p class="numeral">III</p>
+          <h2>Every hero, their own spells</h2>
+          <p class="sub">Save up to 8 spells on a token. They follow it, and anyone who controls it can cast them from a wheel.</p>
+          <ul class="runes">
+            <li>Prepare them once in the <em>Cast</em> tab, with <em>+ Add</em>.</li>
+            <li>In play: click the token, then <em>Spells</em>. The fireball leaves from the wizard.</li>
+            <li>Buffs can stay on the caster or be <strong>aimed at an ally</strong>.</li>
+          </ul>
+        </div>
+        <figure class="clip" data-src="/guide/media/token-wheel.mp4">
+          <figcaption>Open the wheel and cast a spell</figcaption>
+        </figure>
+      </div>
+      <div class="wrap trio">
+        <figure class="clip" data-src="/guide/media/token-prepare.mp4"><figcaption>Save a spell on a token</figcaption></figure>
+        <figure class="clip" data-src="/guide/media/token-second-wheel.mp4"><figcaption>Cast a new one or stop the previous ones</figcaption></figure>
+        <figure class="clip" data-src="/guide/media/token-target.mp4"><figcaption>A buff aimed at an ally</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="programs" class="chapter reverse">
+      <div class="wrap split">
+        <div class="text">
+          <p class="numeral">IV</p>
+          <h2>Scenes that live on their own</h2>
+          <p class="sub">Programs recast an effect by themselves: a cannon firing every 3 seconds, a storm striking at random, braziers burning all night.</p>
+          <ul class="runes">
+            <li>Set the rhythm: random intervals, offsets, a number of shots.</li>
+            <li>Place points on the map or on tokens, in order or at random.</li>
+            <li>Group them and start a whole battlefield with one button.</li>
+          </ul>
+        </div>
+        <figure class="clip" data-src="/guide/media/program.mp4">
+          <figcaption>Create a program and start it</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="install" class="band install">
+      <div class="wrap center">
+        <p class="kicker">Ready in a minute</p>
+        <h2>Bring it to your table</h2>
+        <ol class="ritual">
+          <li><span>1</span><strong>Install</strong> from the <a href="#" data-link="store">Owlbear Rodeo store</a>, or as a custom extension:<code class="copy">https://vfx-owlbear.pages.dev/manifest.json</code></li>
+          <li><span>2</span><strong>Enable it</strong> in your room. Players have nothing to install.</li>
+          <li><span>3</span><strong>Open</strong> <em>Spellcast FX</em> in the top-left menu, and cast.</li>
+        </ol>
+        <p class="sub">You decide whether players can cast too, what only the GM sees, and how many effects each scene can hold.</p>
+      </div>
+    </section>
+
+    <section id="faq" class="chapter">
+      <div class="wrap">
+        <header class="chapter-head center">
+          <p class="kicker">Questions</p>
+          <h2>Before you ask</h2>
+        </header>
+        <div class="faq">
+          <details>
+            <summary>Do players need to install anything?</summary>
+            <p>No. Once the extension is enabled in the room, everyone sees the effects. They stay hidden under fog of war.</p>
+          </details>
+          <details>
+            <summary>Can players cast effects?</summary>
+            <p>Yes, if the GM turns on <em>Players can cast effects</em> in <em>Settings</em>. Token spells work for anyone who controls the token.</p>
+          </details>
+          <details>
+            <summary>A new effect does not appear.</summary>
+            <p>The simultaneous effects limit is probably reached. Raise it in <em>Settings</em>, or wait for running effects to end. Players and programs stop 2 short of the limit, so the GM can always cast.</p>
+          </details>
+          <details>
+            <summary>Will it slow down my players?</summary>
+            <p>Lasting effects keep using every player's graphics card. Limits per scene (10 by default) keep things smooth, and you can lower them for slower machines.</p>
+          </details>
+          <details>
+            <summary>Do effects block vision?</summary>
+            <p>No. They ignore walls and do not change vision rules. A darkness cloud is almost opaque, but only visually.</p>
+          </details>
+          <details>
+            <summary>Which languages are available?</summary>
+            <p>English and French. The interface follows the browser's language, and each player can change it in <em>Settings</em>.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section id="support" class="band">
+      <div class="wrap">
+        <div class="support-card">
+          <div>
+            <p class="kicker">Keep the magic going</p>
+            <h2>Spellcast FX is free</h2>
+            <p class="sub">If it made your table gasp, you can help it grow: new effects, new styles, and time to fix what you report.</p>
+          </div>
+          <div class="actions">
+            <a class="button primary" href="#" data-link="patreon">Support on Patreon</a>
+            <a class="button ghost" href="https://github.com/misterjj/owlbear-rodeo-extension-vfx/issues">Report a bug</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Spellcast FX by Jonathan Jorand · Not affiliated with Owlbear Rodeo ·
+      <a href="https://github.com/misterjj/owlbear-rodeo-extension-vfx">GitHub</a>
+      <p class="privacy">Spellcast FX uses Cloudflare Web Analytics to count visits anonymously, without cookies. No personal data is collected.</p>
+    </footer>
+
+    <script type="module" src="/src/guide.ts"></script>
+  </body>
+</html>

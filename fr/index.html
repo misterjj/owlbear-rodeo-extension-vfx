@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spellcast FX · Effets de sorts pour Owlbear Rodeo</title>
+    <meta name="description" content="Effets de sorts animés pour Owlbear Rodeo : coups, flèches, sorts et explosions, lancés par le MJ ou les joueurs, vus par toute la table." />
+    <link rel="alternate" hreflang="en" href="https://vfx-owlbear.pages.dev/" />
+    <link rel="alternate" hreflang="fr" href="https://vfx-owlbear.pages.dev/fr/" />
+    <link rel="icon" href="/icon.svg" />
+    <link rel="stylesheet" href="/src/guide.css" />
+  </head>
+  <body>
+    <canvas id="embers" aria-hidden="true"></canvas>
+
+    <header class="top">
+      <a class="brand" href="#"><img src="/icon.svg" alt="" /> Spellcast FX</a>
+      <nav>
+        <a href="#grimoire">Grimoire</a>
+        <a href="#cast">Lancer</a>
+        <a href="#lasting">Effets durables</a>
+        <a href="#tokens">Sorts de token</a>
+        <a href="#programs">Programmes</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <a class="lang" href="/" hreflang="en" lang="en" title="English version">EN</a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-label="Menu"><span></span></button>
+      <a class="button small primary" href="#install">Installer</a>
+    </header>
+
+    <section class="hero">
+      <canvas id="sky" aria-hidden="true"></canvas>
+      <div class="hero-inner">
+        <div class="hero-text">
+          <p class="kicker">Extension pour Owlbear Rodeo</p>
+          <h1>Que chaque sort<br /><span class="spark">frappe.</span></h1>
+          <p class="lead">
+            Des boules de feu qui grondent, des éclairs qui sautent d'ennemi en ennemi, des murs de glace qui
+            restent sur la carte. Un clic pour les lancer, toute la table les voit.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="#install">L'ajouter à ta salle</a>
+            <a class="button ghost" href="#cast">Voir comment ça marche</a>
+          </div>
+          <p class="hint"><span class="on-mouse">Clique</span><span class="on-touch">Touche</span> n'importe où ici pour lancer un sort. Élément : <span id="current-element">Feu</span>.</p>
+        </div>
+        <figure class="clip portal" data-src="/guide/media/hero.mp4"></figure>
+      </div>
+      <a class="scroll" href="#grimoire" aria-label="Descendre"></a>
+    </section>
+
+    <section id="grimoire" class="band">
+      <div class="wrap">
+        <header class="chapter-head center">
+          <p class="kicker">Le grimoire</p>
+          <h2>16 éléments × 20 styles</h2>
+          <p class="sub">Choisis un élément, puis un style : il se joue ici même, avec les effets de l'extension. Clique sur la carte pour viser toi-même.</p>
+        </header>
+        <div id="elements" class="elements"></div>
+        <div class="forge">
+          <div class="stage" id="stage">
+            <canvas id="stage-canvas"></canvas>
+            <div class="token caster" style="--x: 3.5; --y: 4.5"><span>M</span><em>Magicien</em></div>
+            <div class="token foe" style="--x: 11.5; --y: 3.5"><span>O</span><em>Ogre</em></div>
+            <div class="token foe" style="--x: 13; --y: 6.5"><span>G</span><em>Gobelin</em></div>
+            <p class="stage-label" id="stage-label"></p>
+          </div>
+          <div id="styles" class="styles"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="cast" class="chapter">
+      <div class="wrap split">
+        <div class="text">
+          <p class="numeral">I</p>
+          <h2>Lancer en un clic</h2>
+          <p class="sub">Ouvre le panneau, choisis un effet, clique sur la carte. Un contour montre la zone avant l'impact.</p>
+          <ul class="runes">
+            <li><strong>Un clic</strong> pour les explosions, dômes, auras, soins…</li>
+            <li><strong>Deux clics</strong> pour les flèches, rayons, cônes et murs : d'ici, jusque-là.</li>
+            <li><strong>Les chaînes</strong> sautent sur chaque cible cliquée, jusqu'à <kbd>Échap</kbd> ou <em>Terminer la chaîne</em>.</li>
+            <li><strong>Coups et griffes</strong> frappent sous un angle au hasard, ou sous l'angle exact que tu choisis.</li>
+          </ul>
+        </div>
+        <figure class="clip" data-src="/guide/media/cast-panel.mp4">
+          <figcaption>Choisir un effet dans le panneau, viser, lancer</figcaption>
+        </figure>
+      </div>
+      <div class="wrap duo">
+        <figure class="clip" data-src="/guide/media/chain.mp4"><figcaption>Une chaîne qui saute de cible en cible</figcaption></figure>
+        <figure class="clip" data-src="/guide/media/direction.mp4"><figcaption>Des griffes sous un angle fixe</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="lasting" class="chapter reverse">
+      <div class="wrap split">
+        <div class="text">
+          <p class="numeral">II</p>
+          <h2>Des effets qui restent</h2>
+          <p class="sub">Coche <em>Durable</em> : l'effet reste jusqu'à ce que tu le retires, même pour les joueurs qui arrivent en cours de partie.</p>
+          <ul class="runes">
+            <li>Pose-le sur un token et il le suit : une aura brûlante, un bouclier, une malédiction.</li>
+            <li>Laisse-le sur la carte : un mur de feu, un dôme de ténèbres, un nuage de poison.</li>
+            <li>Flèches, griffes et explosions laissent une trace : une flèche plantée, un sol brûlé.</li>
+            <li>La liste montre qui a lancé quoi. Survole ✕ pour le voir sur la carte avant de le retirer.</li>
+          </ul>
+        </div>
+        <figure class="clip" data-src="/guide/media/lasting.mp4">
+          <figcaption>Poser un mur, puis le retirer depuis la liste</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="tokens" class="chapter">
+      <div class="wrap split">
+        <div class="text">
+          <p class="numeral">III</p>
+          <h2>À chaque héros ses sorts</h2>
+          <p class="sub">Enregistre jusqu'à 8 sorts sur un token. Ils le suivent, et tous ceux qui le contrôlent peuvent les lancer depuis une roue.</p>
+          <ul class="runes">
+            <li>Prépare-les une fois dans l'onglet <em>Lancer</em>, avec <em>+ Ajouter</em>.</li>
+            <li>En jeu : clique sur le token, puis sur <em>Sorts</em>. La boule de feu part du magicien.</li>
+            <li>Les buffs restent sur le lanceur ou se <strong>visent sur un allié</strong>.</li>
+          </ul>
+        </div>
+        <figure class="clip" data-src="/guide/media/token-wheel.mp4">
+          <figcaption>Ouvrir la roue et lancer un sort</figcaption>
+        </figure>
+      </div>
+      <div class="wrap trio">
+        <figure class="clip" data-src="/guide/media/token-prepare.mp4"><figcaption>Enregistrer un sort sur un token</figcaption></figure>
+        <figure class="clip" data-src="/guide/media/token-second-wheel.mp4"><figcaption>En lancer un nouveau ou arrêter les précédents</figcaption></figure>
+        <figure class="clip" data-src="/guide/media/token-target.mp4"><figcaption>Un buff visé sur un allié</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="programs" class="chapter reverse">
+      <div class="wrap split">
+        <div class="text">
+          <p class="numeral">IV</p>
+          <h2>Des scènes qui vivent toutes seules</h2>
+          <p class="sub">Les programmes relancent un effet d'eux-mêmes : un canon qui tire toutes les 3 secondes, un orage qui frappe au hasard, des braseros qui brûlent toute la nuit.</p>
+          <ul class="runes">
+            <li>Règle le rythme : intervalles au hasard, décalage, nombre de tirs.</li>
+            <li>Place des points sur la carte ou sur des tokens, dans l'ordre ou au hasard.</li>
+            <li>Regroupe-les et lance tout un champ de bataille d'un seul bouton.</li>
+          </ul>
+        </div>
+        <figure class="clip" data-src="/guide/media/program.mp4">
+          <figcaption>Créer un programme et le lancer</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="install" class="band install">
+      <div class="wrap center">
+        <p class="kicker">Prêt en une minute</p>
+        <h2>Amène-le à ta table</h2>
+        <ol class="ritual">
+          <li><span>1</span><strong>Installe-le</strong> depuis le <a href="#" data-link="store">store d'Owlbear Rodeo</a>, ou comme extension personnalisée :<code class="copy">https://vfx-owlbear.pages.dev/manifest.json</code></li>
+          <li><span>2</span><strong>Active-le</strong> dans ta salle. Les joueurs n'ont rien à installer.</li>
+          <li><span>3</span><strong>Ouvre</strong> <em>Spellcast FX</em> dans le menu en haut à gauche, et lance.</li>
+        </ol>
+        <p class="sub">Tu décides si les joueurs peuvent lancer eux aussi, ce que seul le MJ voit, et combien d'effets chaque scène peut contenir.</p>
+      </div>
+    </section>
+
+    <section id="faq" class="chapter">
+      <div class="wrap">
+        <header class="chapter-head center">
+          <p class="kicker">Questions</p>
+          <h2>Avant que tu demandes</h2>
+        </header>
+        <div class="faq">
+          <details>
+            <summary>Les joueurs doivent-ils installer quelque chose ?</summary>
+            <p>Non. Une fois l'extension activée dans la salle, tout le monde voit les effets. Ils restent cachés sous le brouillard de guerre.</p>
+          </details>
+          <details>
+            <summary>Les joueurs peuvent-ils lancer des effets ?</summary>
+            <p>Oui, si le MJ active <em>Les joueurs peuvent lancer des effets</em> dans <em>Réglages</em>. Les sorts de token marchent pour tous ceux qui contrôlent le token.</p>
+          </details>
+          <details>
+            <summary>Un nouvel effet n'apparaît pas.</summary>
+            <p>La limite d'effets simultanés est sans doute atteinte. Augmente-la dans <em>Réglages</em>, ou attends que les effets en cours se terminent. Joueurs et programmes s'arrêtent 2 effets avant la limite, pour que le MJ puisse toujours lancer.</p>
+          </details>
+          <details>
+            <summary>Est-ce que ça ralentit les joueurs ?</summary>
+            <p>Les effets durables sollicitent en continu la carte graphique de chaque joueur. Les limites par scène (10 par défaut) gardent le tout fluide, et tu peux les baisser pour les machines plus modestes.</p>
+          </details>
+          <details>
+            <summary>Les effets bloquent-ils la vision ?</summary>
+            <p>Non. Ils ignorent les murs et ne changent pas les règles de vision. Un nuage de ténèbres est presque opaque, mais seulement à l'œil.</p>
+          </details>
+          <details>
+            <summary>Quelles langues sont disponibles ?</summary>
+            <p>Français et anglais. L'interface suit la langue du navigateur, et chaque joueur peut la changer dans <em>Réglages</em>.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section id="support" class="band">
+      <div class="wrap">
+        <div class="support-card">
+          <div>
+            <p class="kicker">Que la magie continue</p>
+            <h2>Spellcast FX est gratuit</h2>
+            <p class="sub">S'il a fait réagir ta table, tu peux l'aider à grandir : de nouveaux effets, de nouveaux styles, et du temps pour corriger ce que tu signales.</p>
+          </div>
+          <div class="actions">
+            <a class="button primary" href="#" data-link="patreon">Soutenir sur Patreon</a>
+            <a class="button ghost" href="https://github.com/misterjj/owlbear-rodeo-extension-vfx/issues">Signaler un bug</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      Spellcast FX par Jonathan Jorand · Non affilié à Owlbear Rodeo ·
+      <a href="https://github.com/misterjj/owlbear-rodeo-extension-vfx">GitHub</a>
+      <p class="privacy">Spellcast FX utilise Cloudflare Web Analytics pour compter les visites de façon anonyme, sans cookie. Aucune donnée personnelle n'est collectée.</p>
+    </footer>
+
+    <script type="module" src="/src/guide.ts"></script>
+  </body>
+</html>
