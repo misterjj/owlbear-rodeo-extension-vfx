@@ -188,6 +188,8 @@ const fr = {
   "settings.languageAuto": "Celle du navigateur",
   "settings.about": "À propos",
   "settings.guide": "Guide et nouveautés",
+  "settings.support": "Spellcast FX est gratuit. S'il fait réagir ta table, tu peux soutenir son développement.",
+  "settings.patreon": "Soutenir sur Patreon",
   "settings.privacy": "Spellcast FX utilise Cloudflare Web Analytics pour compter les visites de façon anonyme, sans cookie. Aucune donnée personnelle n'est collectée.",
 
   "tool.label": "Lancer un effet",
@@ -450,6 +452,8 @@ const en: Record<TextKey, string> = {
   "settings.languageAuto": "Browser language",
   "settings.about": "About",
   "settings.guide": "Guide and news",
+  "settings.support": "Spellcast FX is free. If it makes your table gasp, you can support its development.",
+  "settings.patreon": "Support on Patreon",
   "settings.privacy": "Spellcast FX uses Cloudflare Web Analytics to count visits anonymously, without cookies. No personal data is collected.",
 
   "tool.label": "Cast an effect",

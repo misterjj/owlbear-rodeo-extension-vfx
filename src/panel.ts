@@ -838,6 +838,7 @@ function limitWarning() {
 
 /** Le site guide, dans la langue de l'interface. */
 const GUIDE_URL_BASE = "https://vfx-owlbear.pages.dev/";
+const PATREON_URL = "https://www.patreon.com/misterjj_obr";
 const guideUrl = () => (currentLanguage() === "fr" ? `${GUIDE_URL_BASE}fr/` : GUIDE_URL_BASE);
 
 function renderSettings() {
@@ -854,6 +855,8 @@ function renderSettings() {
     </section>
     <section class="about">
       <h2>${t("settings.about")}</h2>
+      <p class="note">${t("settings.support")}</p>
+      <p><a class="patreon" href="${PATREON_URL}" target="_blank" rel="noopener">${t("settings.patreon")}</a></p>
       <p class="note"><a href="${GUIDE_URL}" target="_blank" rel="noopener">${t("settings.guide")}</a></p>
       <p class="note">${t("settings.privacy")}</p>
     </section>`;

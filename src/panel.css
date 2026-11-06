@@ -25,6 +25,16 @@ html { color-scheme: dark; }
 #tab-settings .note { margin: 0 0 10px 24px; }
 #tab-settings .about .note { margin-left: 0; }
 #tab-settings .about a { color: #c9b8ff; }
+#tab-settings .about a.patreon {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #ff424d;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+#tab-settings .about a.patreon:hover { background: #ff5a63; }
 .off-tool { display: flex; align-items: center; gap: 8px; background: rgb(255 180 80 / 0.16); }
 .off-tool span { flex: 1; }
 .hint p { margin: 0; }
