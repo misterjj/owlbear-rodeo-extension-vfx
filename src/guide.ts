@@ -20,8 +20,8 @@ const words = dictionary(lang);
 const elementName = (id: ElementId) => words[`element.${id}`];
 const styleName = (id: StyleId) => words[`style.${id}`];
 const TEXT = {
-  en: { soon: "Coming soon", copy: "Click to copy", noWebgl: "Your browser cannot show the effects here (WebGL 2 is off)." },
-  fr: { soon: "Bientôt disponible", copy: "Cliquer pour copier", noWebgl: "Ton navigateur ne peut pas afficher les effets ici (WebGL 2 est désactivé)." },
+  en: { soon: "Coming soon", copy: "Click to copy", copied: "Copied ✓", noWebgl: "Your browser cannot show the effects here (WebGL 2 is off)." },
+  fr: { soon: "Bientôt disponible", copy: "Cliquer pour copier", copied: "Copié ✓", noWebgl: "Ton navigateur ne peut pas afficher les effets ici (WebGL 2 est désactivé)." },
 }[lang];
 
 type Rgb = [number, number, number];
@@ -446,11 +446,17 @@ for (const fig of document.querySelectorAll<HTMLElement>("figure.clip[data-src]"
 
 // --- Copie de l'adresse du manifest ----------------------------------------------
 
-for (const code of document.querySelectorAll<HTMLElement>("code.copy")) {
-  code.title = TEXT.copy;
-  code.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(code.textContent ?? "");
-    code.classList.add("copied");
-    setTimeout(() => code.classList.remove("copied"), 1400);
+for (const button of document.querySelectorAll<HTMLElement>(".copy[data-copy]")) {
+  const label = button.querySelector("b");
+  const idle = label?.textContent ?? "";
+  button.title = TEXT.copy;
+  button.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(button.dataset.copy!);
+    button.classList.add("copied");
+    if (label) label.textContent = TEXT.copied;
+    setTimeout(() => {
+      button.classList.remove("copied");
+      if (label) label.textContent = idle;
+    }, 1600);
   });
 }
