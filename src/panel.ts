@@ -49,7 +49,7 @@ import {
 import { directionField, readDirectionField } from "./direction-field";
 import { elementGrid, elementValue, pickerRow, sizeRow, styleGrid, swatch } from "./effect-fields";
 import { FX_PROGRAM_CHANNEL, programsIn, type Program } from "./fx-programs";
-import { LANGUAGES, LANGUAGE_NAMES, languageSetting, setLanguageSetting, t, type Language } from "./i18n";
+import { currentLanguage, LANGUAGES, LANGUAGE_NAMES, languageSetting, setLanguageSetting, t, type Language } from "./i18n";
 import { watchSceneUnit } from "./scene-unit";
 
 let app: HTMLElement;
@@ -836,7 +836,12 @@ function limitWarning() {
   return warnings.map((text) => `<p class="warning">⚠ ${text}</p>`).join("");
 }
 
+/** Le site guide, dans la langue de l'interface. */
+const GUIDE_URL_BASE = "https://vfx-owlbear.pages.dev/";
+const guideUrl = () => (currentLanguage() === "fr" ? `${GUIDE_URL_BASE}fr/` : GUIDE_URL_BASE);
+
 function renderSettings() {
+  const GUIDE_URL = guideUrl();
   if (!settingsPane) return;
   const language = languageSetting();
   const languageSection = `
@@ -846,6 +851,11 @@ function renderSettings() {
         <option value="auto"${language === "auto" ? " selected" : ""}>${t("settings.languageAuto")}</option>
         ${LANGUAGES.map((id) => `<option value="${id}"${language === id ? " selected" : ""}>${LANGUAGE_NAMES[id]}</option>`).join("")}
       </select>
+    </section>
+    <section class="about">
+      <h2>${t("settings.about")}</h2>
+      <p class="note"><a href="${GUIDE_URL}" target="_blank" rel="noopener">${t("settings.guide")}</a></p>
+      <p class="note">${t("settings.privacy")}</p>
     </section>`;
   settingsPane.innerHTML = isGm
     ? `

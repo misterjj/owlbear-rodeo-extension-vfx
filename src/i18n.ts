@@ -186,6 +186,9 @@ const fr = {
   "settings.warnSimultaneous": "Tous ces effets peuvent se jouer en même temps sur chaque machine : une machine modeste peut ralentir. Teste chez le joueur le moins bien équipé.",
   "settings.language": "Langue",
   "settings.languageAuto": "Celle du navigateur",
+  "settings.about": "À propos",
+  "settings.guide": "Guide et nouveautés",
+  "settings.privacy": "Spellcast FX utilise Cloudflare Web Analytics pour compter les visites de façon anonyme, sans cookie. Aucune donnée personnelle n'est collectée.",
 
   "tool.label": "Lancer un effet",
 
@@ -445,6 +448,9 @@ const en: Record<TextKey, string> = {
   "settings.warnSimultaneous": "All these effects can play at once on each machine: a modest machine may slow down. Test on your least powerful player's machine.",
   "settings.language": "Language",
   "settings.languageAuto": "Browser language",
+  "settings.about": "About",
+  "settings.guide": "Guide and news",
+  "settings.privacy": "Spellcast FX uses Cloudflare Web Analytics to count visits anonymously, without cookies. No personal data is collected.",
 
   "tool.label": "Cast an effect",
 
