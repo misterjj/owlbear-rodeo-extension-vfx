@@ -848,10 +848,11 @@ function renderSettings() {
   const languageSection = `
     <section>
       <h2>${t("settings.language")}</h2>
-      <select id="language" aria-label="${t("settings.language")}">
-        <option value="auto"${language === "auto" ? " selected" : ""}>${t("settings.languageAuto")}</option>
-        ${LANGUAGES.map((id) => `<option value="${id}"${language === id ? " selected" : ""}>${LANGUAGE_NAMES[id]}</option>`).join("")}
-      </select>
+      <div class="segmented" role="group" aria-label="${t("settings.language")}">
+        ${(["auto", ...LANGUAGES] as const)
+          .map((value) => `<button type="button" data-language="${value}" aria-pressed="${value === language}" ${value === "auto" ? "" : `lang="${value}"`}>${value === "auto" ? t("settings.languageAuto") : LANGUAGE_NAMES[value]}</button>`)
+          .join("")}
+      </div>
     </section>
     <section class="about">
       <h2>${t("settings.about")}</h2>
@@ -879,12 +880,15 @@ function renderSettings() {
     </section>
     ${languageSection}`
     : languageSection;
-  settingsPane.querySelector<HTMLSelectElement>("#language")!.onchange = async (event) => {
-    setLanguageSetting((event.target as HTMLSelectElement).value as Language | "auto");
-    await postUi("language");
-    // Tout le menu se redessine dans la nouvelle langue ; un programme en cours de saisie est gardé.
-    location.reload();
-  };
+  settingsPane.querySelectorAll<HTMLButtonElement>("[data-language]").forEach((button) => {
+    button.onclick = async () => {
+      if (button.getAttribute("aria-pressed") === "true") return;
+      setLanguageSetting(button.dataset.language as Language | "auto");
+      await postUi("language");
+      // Tout le menu se redessine dans la nouvelle langue ; un programme en cours de saisie est gardé.
+      location.reload();
+    };
+  });
   if (!isGm) return;
   const gmOnly = settingsPane.querySelector<HTMLInputElement>("#gm-only")!;
   gmOnly.onchange = () => {

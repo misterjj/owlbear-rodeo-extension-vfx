@@ -1,5 +1,6 @@
 import OBR from "@owlbear-rodeo/sdk";
-import { FX_TARGET_KEY, FX_UI_CHANNEL, playersAllowedIn } from "./fx";
+import { FX_DURABLE_KEY, FX_TARGET_KEY, FX_UI_CHANNEL, durablesIn, playersAllowedIn } from "./fx";
+import { FX_PROGRAMS_KEY, programsIn, withActive } from "./fx-programs";
 import { setCastCompact, setupCast, setupSettings, targetToken, watchRoomSettings } from "./panel";
 import { setProgramsCompact, setupPrograms } from "./programmes";
 import { currentLanguage, t, type TextKey } from "./i18n";
@@ -32,6 +33,31 @@ const TABS: { id: Tab; label: TextKey; gmOnly: boolean }[] = [
   { id: "settings", label: "tab.settings", gmOnly: false },
 ];
 
+/** Réglages : une icône seule, comme dans Tempest!. */
+const SETTINGS_ICON =
+  '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>';
+
+/**
+ * Tout arrêter, depuis la barre du haut : le MJ retire tous les effets durables et arrête les programmes ;
+ * un joueur retire seulement les siens.
+ */
+async function stopEverything() {
+  const metadata = await OBR.scene.getMetadata();
+  const durables = durablesIn(metadata);
+  const update: Record<string, unknown> = {
+    [FX_DURABLE_KEY]: isGm ? [] : durables.filter(({ owner }) => owner !== OBR.player.id),
+  };
+  if (isGm) {
+    const programs = programsIn(metadata);
+    const active = programs.filter(({ active }) => active).map(({ id }) => id);
+    if (active.length) update[FX_PROGRAMS_KEY] = withActive(programs, active, false, Date.now(), await OBR.player.getConnectionId());
+  }
+  await OBR.scene.setMetadata(update);
+}
+
+/** Clair ou sombre, comme Owlbear. */
+const applyTheme = (mode: string) => (document.documentElement.dataset.theme = mode === "LIGHT" ? "light" : "dark");
+
 /** Affiche l'onglet sans toucher à l'outil : qui a arrêté de lancer ne doit pas s'y retrouver sans le vouloir. */
 function renderTab(next: Tab) {
   tab = TABS.some(({ id, gmOnly }) => id === next && (isGm || !gmOnly)) ? next : "cast";
@@ -54,7 +80,11 @@ function renderNav() {
   const nav = app.querySelector<HTMLElement>("#tabs")!;
   nav.innerHTML = `
     ${TABS.filter(({ gmOnly }) => isGm || !gmOnly)
-      .map(({ id, label }) => `<button type="button" role="tab" data-tab="${id}">${t(label)}</button>`)
+      .map(({ id, label }) =>
+        id === "settings"
+          ? `<button type="button" role="tab" class="tab-icon" data-tab="${id}" title="${t(label)}" aria-label="${t(label)}">${SETTINGS_ICON}</button>`
+          : `<button type="button" role="tab" data-tab="${id}">${t(label)}</button>`,
+      )
       .join("")}
     <button type="button" id="compact" class="tool" title="${t(compact ? "app.expand" : "app.shrink")}" aria-label="${t(compact ? "app.expandWindow" : "app.shrinkWindow")}">${compact ? "▢" : "–"}</button>`;
   nav.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((button) => {
@@ -92,6 +122,7 @@ function renderAccess() {
   app.querySelector<HTMLElement>("#shell-content")!.hidden = !allowed;
   app.querySelector<HTMLElement>("#denied")!.hidden = allowed;
   app.querySelector<HTMLElement>("#tabs")!.hidden = !allowed;
+  app.querySelector<HTMLElement>("#stop-everything")!.hidden = !allowed;
   if (!allowed) post("disarm");
 }
 
@@ -103,6 +134,10 @@ OBR.onReady(async () => {
   document.documentElement.lang = currentLanguage();
   app.innerHTML = `
     <div id="shell">
+      <header class="app-bar">
+        <strong>${t("app.title")}</strong>
+        <button type="button" class="stop" id="stop-everything">${t("app.stopAll")}</button>
+      </header>
       <nav id="tabs" class="tabs" role="tablist"></nav>
       <p id="denied" class="denied" hidden>${t("app.denied")}</p>
       <div id="shell-content">
@@ -112,6 +147,9 @@ OBR.onReady(async () => {
       </div>
     </div>`;
   const pane = (id: string) => app.querySelector<HTMLDivElement>(`#${id}`)!;
+  app.querySelector<HTMLButtonElement>("#stop-everything")!.onclick = () => stopEverything().catch(warn);
+  OBR.theme.getTheme().then((theme) => applyTheme(theme.mode)).catch(warn);
+  OBR.theme.onChange((theme) => applyTheme(theme.mode));
   setCastCompact(compact);
   setProgramsCompact(compact);
   await watchRoomSettings();

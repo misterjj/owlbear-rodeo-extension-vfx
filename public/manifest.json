@@ -10,7 +10,7 @@
     "title": "Spellcast FX",
     "icon": "/vfx/outil.svg",
     "popover": "/action.html",
-    "width": 360,
+    "width": 400,
     "height": 600
   },
   "background_url": "/background.html"
