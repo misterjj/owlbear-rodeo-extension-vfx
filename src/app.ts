@@ -85,20 +85,28 @@ function renderNav() {
           ? `<button type="button" role="tab" class="tab-icon" data-tab="${id}" title="${t(label)}" aria-label="${t(label)}">${SETTINGS_ICON}</button>`
           : `<button type="button" role="tab" data-tab="${id}">${t(label)}</button>`,
       )
-      .join("")}
-    <button type="button" id="compact" class="tool" title="${t(compact ? "app.expand" : "app.shrink")}" aria-label="${t(compact ? "app.expandWindow" : "app.shrinkWindow")}">${compact ? "▢" : "–"}</button>`;
+      .join("")}`;
   nav.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((button) => {
     button.onclick = () => showTab(button.dataset.tab as Tab);
   });
-  nav.querySelector<HTMLButtonElement>("#compact")!.onclick = () => {
-    compact = !compact;
-    localStorage.setItem(COMPACT_KEY, compact ? "1" : "0");
-    document.documentElement.classList.toggle("compact", compact);
-    setCastCompact(compact);
-    setProgramsCompact(compact);
-    renderNav();
-    renderTab(tab);
-  };
+}
+
+/** Réduire ou agrandir, dans la barre du haut à droite de « Tout arrêter ». */
+function renderCompactButton() {
+  const button = app.querySelector<HTMLButtonElement>("#compact")!;
+  button.textContent = compact ? "▢" : "–";
+  button.title = t(compact ? "app.expand" : "app.shrink");
+  button.setAttribute("aria-label", t(compact ? "app.expandWindow" : "app.shrinkWindow"));
+}
+
+function toggleCompact() {
+  compact = !compact;
+  localStorage.setItem(COMPACT_KEY, compact ? "1" : "0");
+  document.documentElement.classList.toggle("compact", compact);
+  setCastCompact(compact);
+  setProgramsCompact(compact);
+  renderCompactButton();
+  renderTab(tab);
 }
 
 /** La fenêtre prend la hauteur de son contenu, sans dépasser l'écran : il défile au-delà. */
@@ -136,7 +144,10 @@ OBR.onReady(async () => {
     <div id="shell">
       <header class="app-bar">
         <strong>${t("app.title")}</strong>
-        <button type="button" class="stop" id="stop-everything">${t("app.stopAll")}</button>
+        <span class="app-actions">
+          <button type="button" class="stop" id="stop-everything">${t("app.stopAll")}</button>
+          <button type="button" class="tool" id="compact"></button>
+        </span>
       </header>
       <nav id="tabs" class="tabs" role="tablist"></nav>
       <p id="denied" class="denied" hidden>${t("app.denied")}</p>
@@ -148,6 +159,8 @@ OBR.onReady(async () => {
     </div>`;
   const pane = (id: string) => app.querySelector<HTMLDivElement>(`#${id}`)!;
   app.querySelector<HTMLButtonElement>("#stop-everything")!.onclick = () => stopEverything().catch(warn);
+  app.querySelector<HTMLButtonElement>("#compact")!.onclick = toggleCompact;
+  renderCompactButton();
   OBR.theme.getTheme().then((theme) => applyTheme(theme.mode)).catch(warn);
   OBR.theme.onChange((theme) => applyTheme(theme.mode));
   setCastCompact(compact);
