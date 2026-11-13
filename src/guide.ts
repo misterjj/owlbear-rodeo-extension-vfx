@@ -20,8 +20,8 @@ const words = dictionary(lang);
 const elementName = (id: ElementId) => words[`element.${id}`];
 const styleName = (id: StyleId) => words[`style.${id}`];
 const TEXT = {
-  en: { soon: "Coming soon", copy: "Click to copy", copied: "Copied ✓", noWebgl: "Your browser cannot show the effects here (WebGL 2 is off)." },
-  fr: { soon: "Bientôt disponible", copy: "Cliquer pour copier", copied: "Copié ✓", noWebgl: "Ton navigateur ne peut pas afficher les effets ici (WebGL 2 est désactivé)." },
+  en: { soon: "Coming soon", copy: "Click to copy", copied: "Copied ✓", copyFailed: "Copy failed: select the address", noWebgl: "Your browser cannot show the effects here (WebGL 2 is off)." },
+  fr: { soon: "Bientôt disponible", copy: "Cliquer pour copier", copied: "Copié ✓", copyFailed: "Échec : sélectionne l'adresse", noWebgl: "Ton navigateur ne peut pas afficher les effets ici (WebGL 2 est désactivé)." },
 }[lang];
 
 type Rgb = [number, number, number];
@@ -364,17 +364,45 @@ if (!reducedMotion) tick();
 
 // --- En-tête, apparition au défilement ----------------------------------------
 
-const top = document.querySelector(".top")!;
+const top = document.querySelector<HTMLElement>(".top")!;
+const nav = top.querySelector<HTMLElement>("nav")!;
 const menuButton = top.querySelector<HTMLButtonElement>(".menu-toggle")!;
-const setMenu = (open: boolean) => {
-  top.classList.toggle("open", open);
-  menuButton.setAttribute("aria-expanded", String(open));
+const narrow = matchMedia("(max-width: 1100px)");
+const hasPopover = Object.hasOwn(HTMLElement.prototype, "popover");
+
+// Sur petit écran, le menu est un popover : le bouton l'ouvre, Échap ou un clic à côté le ferment.
+// Sur grand écran, c'est une barre de liens ordinaire.
+const syncMenu = () => {
+  if (hasPopover && narrow.matches) nav.setAttribute("popover", "auto");
+  else nav.removeAttribute("popover");
+  top.classList.remove("open");
 };
-menuButton.addEventListener("click", () => setMenu(!top.classList.contains("open")));
-for (const link of top.querySelectorAll("nav a")) link.addEventListener("click", () => setMenu(false));
-const onScroll = () => top.classList.toggle("scrolled", scrollY > 40);
-addEventListener("scroll", onScroll, { passive: true });
-onScroll();
+narrow.addEventListener("change", syncMenu);
+syncMenu();
+
+// Navigateurs sans popover : l'ancien menu, ouvert par une classe.
+if (!hasPopover) {
+  menuButton.setAttribute("aria-expanded", "false");
+  menuButton.addEventListener("click", () => {
+    const open = !top.classList.contains("open");
+    top.classList.toggle("open", open);
+    menuButton.setAttribute("aria-expanded", String(open));
+  });
+}
+for (const link of nav.querySelectorAll("a")) {
+  link.addEventListener("click", () => {
+    if (hasPopover && nav.matches(":popover-open")) nav.hidePopover();
+    top.classList.remove("open");
+    menuButton.setAttribute("aria-expanded", "false");
+  });
+}
+
+// L'en-tête se remplit au défilement en CSS ; ce relais ne sert qu'aux navigateurs qui ne savent pas le faire.
+if (!CSS.supports("(animation-timeline: scroll()) and (animation-range: 0% 100%)")) {
+  const onScroll = () => top.classList.toggle("scrolled", scrollY > 40);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+}
 
 const reveal = new IntersectionObserver(
   (entries) => {
@@ -446,17 +474,32 @@ for (const fig of document.querySelectorAll<HTMLElement>("figure.clip[data-src]"
 
 // --- Copie de l'adresse du manifest ----------------------------------------------
 
+// La bulle à côté du bouton (role="status") montre et annonce le résultat, réussi ou non.
+let lastMessage = "";
 for (const button of document.querySelectorAll<HTMLElement>(".copy[data-copy]")) {
-  const label = button.querySelector("b");
-  const idle = label?.textContent ?? "";
+  const tip = button.nextElementSibling as HTMLElement;
+  let timer = 0;
   button.title = TEXT.copy;
   button.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(button.dataset.copy!);
-    button.classList.add("copied");
-    if (label) label.textContent = TEXT.copied;
-    setTimeout(() => {
-      button.classList.remove("copied");
-      if (label) label.textContent = idle;
-    }, 1600);
+    let ok = true;
+    try {
+      await navigator.clipboard.writeText(button.dataset.copy!);
+    } catch {
+      ok = false;
+    }
+    let message = ok ? TEXT.copied : TEXT.copyFailed;
+    // VoiceOver n'annonce pas deux fois de suite le même message : une espace insécable le rend différent.
+    if (message === lastMessage) message += "\u00A0";
+    lastMessage = message;
+    clearTimeout(timer);
+    button.classList.toggle("copied", ok);
+    button.classList.toggle("failed", !ok);
+    tip.classList.toggle("failed", !ok);
+    tip.textContent = "";
+    requestAnimationFrame(() => (tip.textContent = message));
+    timer = window.setTimeout(() => {
+      button.classList.remove("copied", "failed");
+      tip.textContent = "";
+    }, 2000);
   });
 }

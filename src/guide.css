@@ -20,6 +20,8 @@ body {
   background: var(--bg);
   color: var(--ink);
   font: 17px/1.65 var(--body);
+  /* Hauteur des minuscules d'Inter : la police de secours est mise à la même taille, le texte ne saute pas quand Inter arrive. */
+  font-size-adjust: 0.546;
   overflow-x: hidden;
 }
 body, .button, .clip, .el, .style-card { transition: color 0.6s, background-color 0.6s, border-color 0.6s, box-shadow 0.6s; }
@@ -53,6 +55,13 @@ code, kbd {
   border-bottom: 1px solid transparent;
 }
 .top.scrolled { background: rgb(11 9 16 / 0.8); backdrop-filter: blur(12px); border-color: var(--line); }
+/* Là où le navigateur sait lier une animation au défilement, plus besoin de JS : l'en-tête se remplit sur les 40 premiers pixels. */
+@keyframes top-solid { to { background: rgb(11 9 16 / 0.8); backdrop-filter: blur(12px); border-color: var(--line); } }
+@supports ((animation-timeline: scroll()) and (animation-range: 0% 100%)) {
+  .top { animation: top-solid linear both; animation-timeline: scroll(block root); animation-range: 0px 40px; }
+  /* Menu ouvert : son propre fond, que l'animation écraserait. */
+  .top:is(.open, :has(nav:popover-open)) { animation: none; }
+}
 .brand { display: flex; align-items: center; gap: 0.6rem; color: var(--ink); font: 700 1.15rem var(--display); letter-spacing: 0.04em; text-decoration: none; }
 .brand img { width: 24px; filter: drop-shadow(0 0 6px var(--el-mid)); }
 .top nav { display: flex; gap: 1.8rem; margin-left: auto; }
@@ -135,7 +144,7 @@ code, kbd {
   letter-spacing: 0.28em;
   text-transform: uppercase;
 }
-h1, h2 { font-family: var(--display); font-weight: 700; letter-spacing: 0.01em; margin: 0; }
+h1, h2 { font-family: var(--display); font-weight: 700; letter-spacing: 0.01em; margin: 0; font-size-adjust: cap-height 0.7; } /* mesuré sur Cinzel */
 h1 { font-size: clamp(3rem, 5.6vw, 6.2rem); line-height: 1.02; text-shadow: 0 4px 40px rgb(0 0 0 / 0.6); }
 .spark {
   background: linear-gradient(100deg, var(--el-light), var(--el-mid) 60%, var(--el-light));
@@ -446,14 +455,49 @@ h2 { font-size: clamp(2.2rem, 3.6vw, 3.6rem); line-height: 1.1; }
   font-size: 0.85rem;
 }
 .manifest.copied b { background: color-mix(in srgb, var(--el-mid) 30%, transparent); color: #fff; }
+/* La bulle au-dessus du bouton montre le résultat, et les lecteurs d'écran l'annoncent (role="status"). */
+.copy-wrap { position: relative; display: inline-flex; max-width: 100%; }
+.copy-tip {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  translate: -50% 0;
+  padding: 0.3rem 0.75rem;
+  border-radius: 8px;
+  background: var(--el-light);
+  color: #120a04;
+  font-size: 0.85rem;
+  font-weight: 650;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.copy-tip:not(:empty) { opacity: 1; }
+.copy-tip.failed { background: #ffb4a8; color: #2a0a05; }
+.manifest.failed { border-color: #ffb4a8; }
 
 /* FAQ */
 .faq { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.5rem; align-items: start; }
 details { border-radius: 14px; border: 1px solid var(--line); background: var(--glass); padding: 1.1rem 1.4rem; }
 details[open] { border-color: color-mix(in srgb, var(--el-mid) 45%, transparent); }
-summary { cursor: pointer; font-weight: 650; list-style: none; display: flex; justify-content: space-between; gap: 1rem; }
-summary::after { content: "+"; color: var(--el-light); font-size: 1.3rem; line-height: 1; }
-details[open] summary::after { content: "−"; }
+summary { cursor: pointer; font-weight: 650; list-style: none; display: flex; align-items: baseline; gap: 0.75rem; }
+summary::-webkit-details-marker { display: none; }
+/* Le « + » juste devant la question, pour qu'on l'associe à elle ; il tourne en « × » à l'ouverture. */
+summary::before { content: "+"; flex: none; color: var(--el-light); font-size: 1.3rem; line-height: 1; }
+details[open] > summary::before { rotate: 45deg; }
+/* La réponse se déplie en douceur là où le navigateur sait animer vers « auto » ; ailleurs elle s'ouvre d'un coup. */
+details::details-content { interpolate-size: allow-keywords; overflow: clip; contain: layout; }
+details:not([open])::details-content { block-size: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  summary::before { transition: rotate 0.2s; }
+  details::details-content {
+    transition: block-size, content-visibility, display;
+    transition-duration: 0.3s;
+    transition-timing-function: ease-in-out;
+    transition-behavior: allow-discrete;
+  }
+}
 details p { margin: 0.8rem 0 0; color: var(--muted); }
 
 /* Soutien */
@@ -511,9 +555,9 @@ footer .privacy { max-width: 40rem; margin: 0.8rem auto 0; font-size: 0.78rem; o
   .menu-toggle span::before, .menu-toggle span::after { content: ""; position: absolute; left: 0; }
   .menu-toggle span::before { top: -6px; }
   .menu-toggle span::after { top: 6px; }
-  .top.open .menu-toggle span { background: transparent; }
-  .top.open .menu-toggle span::before { transform: translateY(6px) rotate(45deg); }
-  .top.open .menu-toggle span::after { transform: translateY(-6px) rotate(-45deg); }
+  .top:is(.open, :has(nav:popover-open)) .menu-toggle span { background: transparent; }
+  .top:is(.open, :has(nav:popover-open)) .menu-toggle span::before { transform: translateY(6px) rotate(45deg); }
+  .top:is(.open, :has(nav:popover-open)) .menu-toggle span::after { transform: translateY(-6px) rotate(-45deg); }
   /* Le menu se déplie sous la barre. */
   .top nav {
     display: none;
@@ -527,8 +571,23 @@ footer .privacy { max-width: 40rem; margin: 0.8rem auto 0; font-size: 0.78rem; o
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--line);
   }
-  .top.open { background: rgb(11 9 16 / 0.96); border-color: var(--line); }
+  .top:is(.open, :has(nav:popover-open)) { background: rgb(11 9 16 / 0.96); border-color: var(--line); }
   .top.open nav { display: flex; }
+  /* Le menu est un popover : il passe au-dessus de la page, sous l'en-tête. */
+  .top { anchor-name: --top; }
+  .top nav[popover] {
+    position: fixed;
+    /* Hauteur de l'en-tête, pour les navigateurs qui ne savent pas encore lire anchor(). */
+    inset: calc(1.6rem + 37px) 0 auto;
+    top: anchor(--top bottom);
+    width: auto;
+    height: auto;
+    max-height: calc(100dvh - 5rem);
+    overflow: auto;
+    color: inherit;
+    border-width: 0 0 1px;
+  }
+  .top nav:popover-open { display: flex; }
   .top nav a { padding: 0.8rem 0; font-size: 1.05rem; border-bottom: 1px solid var(--line); }
   .top nav a:last-child { border-bottom: 0; }
 
@@ -569,7 +628,7 @@ footer .privacy { max-width: 40rem; margin: 0.8rem auto 0; font-size: 0.78rem; o
   .numeral { font-size: 3rem; }
   .runes { margin-top: 1.4rem; }
   .duo, .trio, .ritual, .faq { grid-template-columns: minmax(0, 1fr); }
-  .install-bar .button, .manifest { width: 100%; justify-content: center; }
+  .install-bar .button, .copy-wrap, .manifest { width: 100%; justify-content: center; }
   .manifest small { display: none; }
   /* Les éléments défilent sur une seule ligne, au doigt. */
   .elements {

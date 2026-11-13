@@ -15,7 +15,7 @@
 
     <header class="top">
       <a class="brand" href="#"><img src="/icon.svg" alt="" /> Spellcast FX</a>
-      <nav>
+      <nav id="site-menu">
         <a href="#grimoire">Grimoire</a>
         <a href="#cast">Lancer</a>
         <a href="#lasting">Effets durables</a>
@@ -24,7 +24,7 @@
         <a href="#faq">FAQ</a>
       </nav>
       <a class="lang" href="/" hreflang="en" lang="en" title="English version">EN</a>
-      <button class="menu-toggle" type="button" aria-expanded="false" aria-label="Menu"><span></span></button>
+      <button class="menu-toggle" type="button" popovertarget="site-menu" aria-controls="site-menu" aria-label="Menu"><span></span></button>
       <a class="button small primary" href="#install">Installer</a>
     </header>
 
@@ -165,11 +165,14 @@
         <div class="install-bar">
           <a class="button primary" href="#" data-link="store">Store d'Owlbear Rodeo</a>
           <span class="or">ou</span>
-          <button class="manifest copy" type="button" data-copy="https://vfx-owlbear.pages.dev/manifest.json">
-            <small>Extension personnalisée</small>
-            <code>https://vfx-owlbear.pages.dev/manifest.json</code>
-            <b>Copier</b>
-          </button>
+          <span class="copy-wrap">
+            <button class="manifest copy" type="button" data-copy="https://vfx-owlbear.pages.dev/manifest.json">
+              <small>Extension personnalisée</small>
+              <code>https://vfx-owlbear.pages.dev/manifest.json</code>
+              <b>Copier</b>
+            </button>
+            <span class="copy-tip" role="status"></span>
+          </span>
         </div>
       </div>
     </section>
