@@ -43,14 +43,12 @@ let current: ElementId = "feu";
 let target = tones(current);
 const shown = { dark: [...target.dark] as Rgb, mid: [...target.mid] as Rgb, light: [...target.light] as Rgb };
 let autoCycle = !reducedMotion;
-const label = document.getElementById("current-element");
 
 function setElement(id: ElementId, byUser = false) {
   current = id;
   target = tones(id);
   if (byUser) autoCycle = false;
   if (!tinting) requestAnimationFrame(tint);
-  if (label) label.textContent = elementName(id);
   for (const b of document.querySelectorAll<HTMLElement>(".el")) b.classList.toggle("active", b.dataset.id === id);
 }
 
@@ -104,7 +102,7 @@ const cell = (x: number, y: number): Point => ({ x: x * DPI, y: y * DPI });
 const CASTER = cell(3.5, 4.5);
 const FOE = cell(11.5, 3.5);
 const FOE_2 = cell(13, 6.5);
-const ON_CASTER: StyleId[] = ["aura", "transformation", "soin", "dome"];
+const ON_CASTER: StyleId[] = ["aura", "transformation", "soin", "dome", "invisibilite", "concentration"];
 
 const stageEl = document.getElementById("stage")!;
 const stage = createStage(document.getElementById("stage-canvas") as HTMLCanvasElement, 16 * DPI);
@@ -137,8 +135,15 @@ function selectStyle(id: StyleId) {
   for (const b of document.querySelectorAll<HTMLElement>(".style-card")) b.classList.toggle("active", b.dataset.id === id);
 }
 
+/** Le grimoire ne montre qu'une partie des styles : la phrase sous la liste annonce les autres. */
+const HIDDEN_STYLES: StyleId[] = [
+  "tir", "rafale", "blaster", "invisibilite",
+  "charme", "sommeil", "etourdi", "effraye", "paralyse", "empoisonne", "concentration", "ralenti",
+];
+const SHOWN_STYLES = STYLE_IDS.filter((id) => !HIDDEN_STYLES.includes(id));
+
 const stylesBox = document.getElementById("styles")!;
-for (const id of STYLE_IDS) {
+for (const id of SHOWN_STYLES) {
   const card = document.createElement("button");
   card.className = "style-card";
   card.dataset.id = id;
@@ -164,7 +169,7 @@ let stageVisible = false;
 new IntersectionObserver(([e]) => (stageVisible = e.isIntersecting), { threshold: 0.4 }).observe(stageEl);
 setInterval(() => {
   if (!demo || !stageVisible || document.hidden) return;
-  selectStyle(STYLE_IDS[(STYLE_IDS.indexOf(style) + 1) % STYLE_IDS.length]);
+  selectStyle(SHOWN_STYLES[(SHOWN_STYLES.indexOf(style) + 1) % SHOWN_STYLES.length]);
   cast();
 }, 2600);
 
@@ -304,11 +309,6 @@ function burst(x: number, y: number, scale = 1) {
     particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1, life: 0, max: 40 + Math.random() * 50, size: 1 + Math.random() * 2.5, burst: true });
   }
 }
-
-hero.addEventListener("click", (e) => {
-  if ((e.target as HTMLElement).closest("a, figure")) return;
-  burst(e.clientX, e.clientY);
-});
 
 function tick() {
   requestAnimationFrame(tick);

@@ -21,7 +21,7 @@ learn-more: https://vfx-owlbear.pages.dev/
 
 ## Features
 
-- **16 elements × 20 styles:** strikes, claws, arrows, projectiles, beams, cones, explosions, meteors, walls, domes, auras, chains, teleports and more.
+- **16 elements × 32 styles:** strikes, claws, arrows, gunshots, blasters, projectiles, beams, cones, explosions, meteors, walls, domes, auras, chains, teleports, invisibility, conditions (charmed, asleep, stunned…) and more.
 - **One click** for explosions, domes, auras and healing. **Two clicks** for arrows, beams, cones and walls. **Chains** jump to every target you click.
 - **Lasting effects** stay on the map or follow a token until you remove them, even for players who join later.
 - **Token spells:** save up to 8 spells on a token, cast from a wheel by anyone who controls it.

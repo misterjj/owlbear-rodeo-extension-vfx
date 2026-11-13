@@ -56,6 +56,9 @@ import {
   type Favorite,
   addFavorite,
   arrowDuration,
+  boltDuration,
+  bulletDuration,
+  burstSpread,
   buildMessage,
   coneTarget,
   effectScale,
@@ -318,9 +321,12 @@ describe("réglages", () => {
   });
 
   it("propose tous les styles, et demande un lanceur seulement à ceux qui partent d'un point", () => {
-    expect(STYLE_IDS).toHaveLength(20);
+    expect(STYLE_IDS).toHaveLength(32);
     expect(STYLE_IDS.filter((id) => STYLES[id].directed)).toEqual([
       "fleche",
+      "tir",
+      "rafale",
+      "blaster",
       "projectile",
       "rayon",
       "chaine",
@@ -339,6 +345,29 @@ describe("géométrie", () => {
     expect(projectileDuration(from, { x: 90000, y: 0 }, 150)).toBe(800);
   });
 
+  it("fait filer une balle plus vite qu'une flèche, et un blaster plus vite qu'un projectile", () => {
+    const from = { x: 0, y: 0 };
+    const to = { x: 900, y: 0 };
+    expect(bulletDuration(from, to, 150) * 0.45).toBeLessThan(arrowDuration(from, to, 150));
+    expect(boltDuration(from, to, 150) * 0.7).toBeLessThan(projectileDuration(from, to, 150));
+  });
+
+  it("disperse les balles d'une rafale de la même façon chez tous les joueurs", () => {
+    expect(burstSpread(4.2, 0)).toBe(0);
+    for (const shot of [1, 2]) {
+      expect(Math.abs(burstSpread(4.2, shot))).toBeLessThanOrEqual(0.25);
+      expect(burstSpread(4.2, shot)).toBe(burstSpread(4.2, shot));
+    }
+    expect(burstSpread(4.2, 1)).not.toBe(burstSpread(4.2, 2));
+  });
+
+  it("laisse la trace d'une rafale après sa dernière balle", () => {
+    const from = { x: 0, y: 0 };
+    const at = { x: 700, y: 0 };
+    expect(restDelay("rafale", 1, from, at, 70)).toBeGreaterThan(restDelay("tir", 1, from, at, 70));
+    expect(restDelay("blaster", 1, from, at, 70)).toBeGreaterThan(0);
+  });
+
   it("fait voler la flèche plus vite qu'un projectile", () => {
     const from = { x: 0, y: 0 };
     const to = { x: 900, y: 0 };
@@ -352,7 +381,7 @@ describe("géométrie", () => {
 
   it("place tous les effets avec le repère fourni par Owlbear", () => {
     const sources = Object.values(shaders).filter((value) => typeof value === "string");
-    expect(sources).toHaveLength(18);
+    expect(sources).toHaveLength(21);
     for (const sksl of sources) {
       expect(sksl).toContain("uniform mat3 model;");
       expect(sksl).toContain("uniform float t;");
@@ -528,7 +557,7 @@ describe("sorts d'un token", () => {
   });
 
   it("ne fait viser que les effets qui ne partent pas du token lui-même", () => {
-    for (const style of ["aura", "soin", "dome", "transformation"] as const) expect(castsOnSelf(style)).toBe(true);
+    for (const style of ["aura", "soin", "dome", "transformation", "invisibilite", "concentration"] as const) expect(castsOnSelf(style)).toBe(true);
     for (const style of ["explosion", "coup", "rayon"] as const) expect(castsOnSelf(style)).toBe(false);
   });
 

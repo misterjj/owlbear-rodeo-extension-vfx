@@ -37,7 +37,7 @@ export function elementGrid(selected: ElementId) {
 }
 
 const shortLabel = (id: StyleId) =>
-  id === "transformation" || id === "teleportation" ? t(`styleShort.${id}`) : styleLabel(id);
+  id === "transformation" || id === "teleportation" || id === "invisibilite" || id === "concentration" ? t(`styleShort.${id}`) : styleLabel(id);
 
 export function styleGrid(selected: StyleId) {
   return STYLE_GROUPS.map(

@@ -270,6 +270,9 @@ export const STYLES = {
   griffes: { directed: false, reach: 0.9, exactZone: false },
   morsure: { directed: false, reach: 0.9, exactZone: false },
   fleche: { directed: true, reach: 0, exactZone: false },
+  tir: { directed: true, reach: 0, exactZone: false },
+  rafale: { directed: true, reach: 0, exactZone: false },
+  blaster: { directed: true, reach: 0, exactZone: false },
   projectile: { directed: true, reach: 0, exactZone: false },
   rayon: { directed: true, reach: 0, exactZone: false },
   chaine: { directed: true, reach: 0, exactZone: false },
@@ -285,6 +288,15 @@ export const STYLES = {
   flamme: { directed: false, reach: 1, exactZone: true },
   transformation: { directed: false, reach: 1.2, exactZone: true },
   soin: { directed: false, reach: 1, exactZone: true },
+  invisibilite: { directed: false, reach: 0.65, exactZone: false },
+  charme: { directed: false, reach: 0.5, exactZone: true },
+  sommeil: { directed: false, reach: 0.5, exactZone: true },
+  etourdi: { directed: false, reach: 0.5, exactZone: true },
+  effraye: { directed: false, reach: 0.5, exactZone: true },
+  paralyse: { directed: false, reach: 0.5, exactZone: true },
+  empoisonne: { directed: false, reach: 0.5, exactZone: true },
+  concentration: { directed: false, reach: 0.5, exactZone: true },
+  ralenti: { directed: false, reach: 0.5, exactZone: true },
   teleportation: { directed: true, reach: 0, exactZone: false },
 } as const;
 
@@ -504,6 +516,36 @@ export function teleportTiming(size: SizeId) {
 /** Une flèche va plus vite qu'un sort. */
 export const arrowDuration = (from: Point, to: Point, dpi: number) =>
   Math.round(projectileDuration(from, to, dpi) * 0.65);
+
+/** Part de l'effet pendant laquelle la balle vole : le reste est l'impact. */
+export const BULLET_FLIGHT_SHARE = 0.45;
+
+/** Une balle file plus vite que tout le reste, mais son traceur doit rester visible. */
+export function bulletDuration(from: Point, to: Point, dpi: number) {
+  const cells = Math.hypot(to.x - from.x, to.y - from.y) / dpi;
+  return Math.round(Math.min(240, Math.max(80, cells * 16)) / BULLET_FLIGHT_SHARE);
+}
+
+/** Une rafale tire trois balles rapprochées, un peu dispersées autour du point visé. */
+export const BURST_SHOTS = 3;
+export const BURST_GAP_MS = 90;
+
+/**
+ * Écart de chaque balle d'une rafale, en cases, de part et d'autre de la ligne de tir. La première
+ * va droit au but ; les autres dérivent selon la graine, pour être les mêmes chez tous les joueurs.
+ */
+export function burstSpread(seed: number, shot: number) {
+  if (shot === 0) return 0;
+  const noise = Math.sin((seed + shot * 12.9898) * 78.233) * 43758.5453;
+  return (noise - Math.floor(noise) - 0.5) * 0.5;
+}
+
+/** Part de l'effet pendant laquelle le trait de blaster vole avant de toucher. */
+export const BOLT_FLIGHT_SHARE = 0.7;
+
+/** Un trait de blaster va plus vite qu'un sort, assez lentement pour qu'on le voie traverser. */
+export const boltDuration = (from: Point, to: Point, dpi: number) =>
+  Math.round((projectileDuration(from, to, dpi) * 0.6) / BOLT_FLIGHT_SHARE);
 
 /** Un cône a une longueur fixe : le clic ne donne que sa direction. */
 export function coneTarget(from: Point, at: Point, length: number): Point {
@@ -727,7 +769,7 @@ export const defaultSpellName = ({ element, style }: FxCast) =>
 
 /** Ces styles partent du token sans qu'il y ait à viser. */
 export const castsOnSelf = (style: StyleId) =>
-  style === "aura" || style === "soin" || style === "dome" || style === "transformation";
+  style === "aura" || style === "soin" || style === "dome" || style === "transformation" || style === "invisibilite" || style === "concentration";
 
 /** Un effet dirigé se vise toujours ; les autres peuvent partir du lanceur ou aller sur quelqu'un d'autre. */
 export const canChooseTarget = (style: StyleId) => !STYLES[style].directed;
@@ -825,12 +867,16 @@ export function readableColor([r, g, b]: Rgb): Rgb {
   return [r + (1 - r) * add, g + (1 - g) * add, b + (1 - b) * add];
 }
 
+/** États posés sur un token : de petits symboles qui le suivent, lancés en durable le plus souvent. */
+export const CONDITION_STYLES = ["charme", "sommeil", "etourdi", "effraye", "paralyse", "empoisonne", "concentration", "ralenti"] as const satisfies readonly StyleId[];
+
 /** Regroupement des styles dans l'onglet Lancer. */
 export const STYLE_GROUPS: { label: TextKey; styles: StyleId[] }[] = [
   { label: "group.melee", styles: ["coup", "griffes", "morsure"] },
-  { label: "group.ranged", styles: ["fleche", "projectile", "rayon", "chaine"] },
+  { label: "group.ranged", styles: ["fleche", "tir", "rafale", "blaster", "projectile", "rayon", "chaine"] },
   { label: "group.areas", styles: ["explosion", "meteore", "cone", "flamme", "mur", "dome", "cube", "pluie", "nuage"] },
-  { label: "group.self", styles: ["aura", "transformation", "soin", "teleportation"] },
+  { label: "group.self", styles: ["aura", "transformation", "soin", "invisibilite", "teleportation"] },
+  { label: "group.states", styles: [...CONDITION_STYLES] },
 ];
 
 export const isDurable = ({ durable }: { durable?: boolean }) => durable === true;
@@ -974,7 +1020,7 @@ export const sameDurable = (entry: DurableEntry, { element, style }: FxCast) =>
   !entry.program && entry.element === element && entry.style === style;
 
 /** Styles dont il ne reste qu'une trace : lancés durables, ils jouent d'abord leur animation complète. */
-export const LEAVES_TRACE: readonly StyleId[] = ["fleche", "projectile", "coup", "griffes", "morsure", "explosion", "meteore"];
+export const LEAVES_TRACE: readonly StyleId[] = ["fleche", "tir", "rafale", "blaster", "projectile", "coup", "griffes", "morsure", "explosion", "meteore"];
 
 /** Un effet qui tient, par opposition à une trace ou à la boucle de la téléportation. */
 export const isSustained = (style: StyleId) => style !== "teleportation" && !LEAVES_TRACE.includes(style);
@@ -1010,11 +1056,16 @@ const REST_MOMENT: Partial<Record<StyleId, { ms: number; at: number }>> = {
   transformation: { ms: 2600, at: 0.5 },
   nuage: { ms: 4000, at: 0.5 },
   soin: { ms: 1800, at: 0.5 },
+  invisibilite: { ms: 2400, at: 0.5 },
+  ...Object.fromEntries(CONDITION_STYLES.map((style) => [style, { ms: 3000, at: 0.5 }])),
 };
 
 /** Temps entre le lancer et l'apparition de l'effet qui reste, en millisecondes. */
 export function restDelay(style: StyleId, scale: number, from: Point, at: Point, dpi: number) {
   if (style === "fleche") return arrowDuration(from, at, dpi);
+  if (style === "tir") return bulletDuration(from, at, dpi) * BULLET_FLIGHT_SHARE;
+  if (style === "rafale") return bulletDuration(from, at, dpi) * BULLET_FLIGHT_SHARE + BURST_GAP_MS * (BURST_SHOTS - 1);
+  if (style === "blaster") return boltDuration(from, at, dpi) * BOLT_FLIGHT_SHARE;
   if (style === "projectile") return projectileDuration(from, at, dpi) + scaledDuration(1000, scale) * 0.5;
   const moment = REST_MOMENT[style];
   return moment ? scaledDuration(moment.ms, scale) * moment.at : 0;

@@ -1,6 +1,11 @@
 import type { Matrix, Uniform } from "@owlbear-rodeo/sdk";
 import {
   arrowDuration,
+  boltDuration,
+  bulletDuration,
+  burstSpread,
+  BURST_GAP_MS,
+  BURST_SHOTS,
   CHAIN_HOP_MS,
   coneTarget,
   effectScale,
@@ -15,16 +20,20 @@ import {
 } from "./fx";
 import {
   ARROW_SKSL,
+  BOLT_SKSL,
+  BULLET_SKSL,
   AURA_SKSL,
   BEAM_SKSL,
   BITE_SKSL,
   CLOUD_SKSL,
+  CONDITION_SKSL,
   CONE_SKSL,
   CUBE_SKSL,
   DOME_SKSL,
   EXPLOSION_SKSL,
   FLAME_SKSL,
   HEAL_SKSL,
+  INVISIBILITY_SKSL,
   METEOR_SKSL,
   PROJECTILE_SKSL,
   RAIN_SKSL,
@@ -119,6 +128,47 @@ export async function playEffect(message: FxMessage, dpi: number, animate: Anima
         arrowDuration(from, at, dpi),
       );
       await explosion(animate, at, dpi * 0.4 * scale, element, seed, unit, scaledDuration(500, scale));
+      break;
+    case "tir":
+    case "rafale": {
+      const shots = style === "rafale" ? BURST_SHOTS : 1;
+      const length = Math.max(Math.hypot(at.x - from.x, at.y - from.y), 1);
+      // Perpendiculaire à la ligne de tir, pour disperser les balles d'une rafale.
+      const side = { x: -(at.y - from.y) / length, y: (at.x - from.x) / length };
+      await Promise.all(
+        Array.from({ length: shots }, (_, shot) => {
+          const drift = burstSpread(seed, shot) * dpi * scale;
+          const hit = { x: at.x + side.x * drift, y: at.y + side.y * drift };
+          return wait(shot * BURST_GAP_MS).then(() =>
+            animate(
+              BULLET_SKSL,
+              from,
+              [
+                // Une balle file droit, même dans un élément qui ondule.
+                ...commonUniforms(element, seed + shot * 3.7, unit).filter(({ name }) => name !== "warp"),
+                { name: "warp", value: 0 },
+                { name: "target", value: vector(from, hit) },
+                { name: "width", value: dpi * 0.035 * scale },
+              ],
+              bulletDuration(from, hit, dpi),
+            ),
+          );
+        }),
+      );
+      break;
+    }
+    case "blaster":
+      await animate(
+        BOLT_SKSL,
+        from,
+        [
+          ...common.filter(({ name }) => name !== "warp"),
+          { name: "warp", value: 0 },
+          { name: "target", value: vector(from, at) },
+          { name: "width", value: dpi * 0.055 * scale },
+        ],
+        boltDuration(from, at, dpi),
+      );
       break;
     case "coup":
     case "griffes":
@@ -290,6 +340,29 @@ export async function playEffect(message: FxMessage, dpi: number, animate: Anima
         at,
         [...common, { name: "radius", value: dpi * STYLES.soin.reach * scale }],
         scaledDuration(1800, scale),
+      );
+      break;
+    case "charme":
+    case "sommeil":
+    case "etourdi":
+    case "effraye":
+    case "paralyse":
+    case "empoisonne":
+    case "concentration":
+    case "ralenti":
+      await animate(
+        CONDITION_SKSL[style],
+        at,
+        [...common, { name: "radius", value: dpi * STYLES[style].reach * scale }],
+        scaledDuration(3000, scale),
+      );
+      break;
+    case "invisibilite":
+      await animate(
+        INVISIBILITY_SKSL,
+        at,
+        [...common, { name: "radius", value: dpi * STYLES.invisibilite.reach * scale }],
+        scaledDuration(2400, scale),
       );
       break;
     case "teleportation": {

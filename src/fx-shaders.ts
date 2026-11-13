@@ -426,6 +426,63 @@ half4 main(float2 coord) {
 }
 `;
 
+/**
+ * Invisibilité : simple repère pour la table, le token reste dessous. Il se dissout d'abord dans un
+ * éclat, puis il ne reste qu'un voile pâle qui ondule comme de l'air chaud, cerclé de pointillés qui
+ * tournent lentement, avec quelques scintillements. Le repère est discret pour ne pas cacher la carte.
+ */
+const invisibility = (timing: Timing) => `${common(timing, 2.4)}
+uniform float radius;
+
+half4 main(float2 coord) {
+  vec2 p = local(coord) / radius;
+  float d = length(p);
+  if (d > 1.3) return half4(0.0);
+
+  float now = clock();
+  float l = life();
+  float fade = smoothstep(0.0, 0.2, l) * (1.0 - smoothstep(0.8, 1.0, l));
+  float angle = atan(p.y, p.x);
+  vec3 pale = mix(palette[2], vec3(1.0), 0.45);
+
+  // Dissolution : un disque lumineux rongé par le bruit, qui disparaît au début de l'effet.
+  float gone = smoothstep(0.04, 0.38, l);
+  float grain = fbm(p * 4.5 + seed);
+  float disk = 1.0 - smoothstep(0.82, 0.92, d);
+  float dissolve = disk * smoothstep(gone - 0.02, gone + 0.02, grain) * (1.0 - smoothstep(0.3, 0.42, l));
+  float edgeOffset = (grain - gone) / 0.035;
+  float edge = disk * exp(-edgeOffset * edgeOffset) * (1.0 - smoothstep(0.3, 0.42, l));
+
+  // Voile : des ondes déformées qui courent du centre vers le bord, comme un mirage.
+  float bend = fbm(p * 2.6 + vec2(seed, now * 0.7)) * 3.5;
+  float ripples = pow(0.5 + 0.5 * sin(d * 16.0 + bend - now * 5.0), 10.0);
+  float veil = (ripples * 0.45 + 0.1) * (1.0 - smoothstep(0.7, 0.95, d)) * smoothstep(0.15, 0.4, l);
+
+  // Contour en pointillés qui tourne : douze tirets, donc aucune coupure entre -π et π.
+  float dashes = smoothstep(0.1, 0.5, sin(angle * 12.0 + now * 2.0));
+  float ringOffset = (d - 0.98) / 0.025;
+  float ring = exp(-ringOffset * ringOffset) * (0.25 + 0.75 * dashes) * 0.8 * smoothstep(0.1, 0.35, l);
+
+  // Scintillements : de petites croix qui s'allument et s'éteignent çà et là.
+  float twinkles = 0.0;
+  for (int i = 0; i < 9; i++) {
+    float index = float(i) + seed;
+    float a = hash(vec2(index, 4.1)) * 6.2832;
+    float r = sqrt(hash(vec2(index, 7.7))) * 0.85;
+    vec2 q = (p - vec2(cos(a), sin(a)) * r) * 60.0;
+    float blink = pow(max(sin((now * 0.8 + hash(vec2(index, 1.9))) * 6.2832), 0.0), 4.0);
+    float star = exp(-q.x * q.x * 0.6) * exp(-abs(q.y) * 0.35) + exp(-q.y * q.y * 0.6) * exp(-abs(q.x) * 0.35);
+    twinkles += star * blink;
+  }
+
+  float bright = clamp(dissolve * 0.8 + edge + twinkles, 0.0, 1.0);
+  float soft = clamp(veil + ring, 0.0, 1.0);
+  float alpha = clamp(soft * 0.55 + bright, 0.0, 1.0) * fade;
+  vec3 color = mix(pale, ramp(0.9), clamp(edge, 0.0, 1.0)) * alpha;
+  return half4(color, alpha);
+}
+`;
+
 const arrow = (timing: Timing) => `${common(timing, 1)}
 uniform vec2 target;
 uniform float width;
@@ -463,6 +520,142 @@ half4 main(float2 coord) {
   float heat = head > 0.5 ? 1.0 : (fletching > 0.5 && shaft < 0.5 ? 0.15 : 0.6);
   float alpha = solid + trace * (1.0 - solid);
   vec3 color = ramp(heat) * solid + palette[1] * trace * (1.0 - solid);
+  return half4(color, alpha);
+}
+`;
+
+/**
+ * Coup de feu : éclair à la bouche du canon, traceur qui file en un instant, puis étincelles et
+ * poussière à l'impact. La balle arrive à 45 % de l'effet (`BULLET_FLIGHT_SHARE`).
+ */
+const bullet = (timing: Timing) => `${common(timing, 1)}
+uniform vec2 target;
+uniform float width;
+
+half4 main(float2 coord) {
+  ${timing.main}
+  vec2 p = local(coord);
+  float len = max(length(target), 1.0);
+  vec2 dir = target / len;
+  float along = dot(p, dir);
+  float across = dot(p, vec2(-dir.y, dir.x));
+  float margin = width * 16.0;
+  if (along < -margin || along > len + margin || abs(across) > margin) return half4(0.0);
+
+  float fly = clamp(t / 0.45, 0.0, 1.0);
+  float impact = clamp((t - 0.45) / 0.55, 0.0, 1.0);
+  float landed = step(0.45, t);
+
+  // Traceur : un trait fin et très chaud, plus long que la balle, qui s'efface à l'impact.
+  float head = fly * len;
+  float behind = head - along;
+  float streak = min(len * 0.4, width * 70.0);
+  float a = across / width;
+  float tracer = 0.0;
+  if (along > 0.0 && along < len && behind > -width && behind < streak) {
+    float tail = 1.0 - clamp(behind / streak, 0.0, 1.0);
+    tracer = exp(-a * a * 1.6) * tail * tail * (1.0 - smoothstep(0.0, width, -behind)) * (1.0 - landed);
+  }
+
+  // Éclair à la bouche du canon : un cœur rond et une flamme vers l'avant, avec deux pointes sur les côtés.
+  float muzzleFade = 1.0 - smoothstep(0.0, 0.2, t);
+  float r = length(p) / width;
+  float forward = along > 0.0 ? exp(-a * a * 0.35) * exp(-along / (width * 5.0)) : 0.0;
+  float sides = exp(-along * along / (width * width * 0.8)) * exp(-abs(a) / 2.5) * 0.6;
+  float muzzle = (exp(-r * r / 6.0) + forward + sides) * muzzleFade;
+
+  // Impact : un éclair bref, des étincelles qui rebondissent vers le tireur et un peu de poussière.
+  vec2 q = p - target;
+  float hitFlash = exp(-dot(q, q) / (width * width * 5.0)) * (1.0 - smoothstep(0.0, 0.3, impact)) * landed;
+  float sparks = 0.0;
+  for (int i = 0; i < 8; i++) {
+    float index = float(i) + seed;
+    // Vers le tireur, à 75° près de chaque côté : tourner -dir évite atan, imprécis sur un tir horizontal.
+    float turn = (hash(vec2(index, 3.1)) - 0.5) * 2.6;
+    vec2 back = vec2(-dir.x * cos(turn) + dir.y * sin(turn), -dir.x * sin(turn) - dir.y * cos(turn));
+    float speed = 5.0 + hash(vec2(index, 8.3)) * 7.0;
+    vec2 spark = q - back * speed * width * pow(impact, 0.5);
+    sparks += exp(-dot(spark, spark) / (width * width * 0.35));
+  }
+  sparks *= landed * (1.0 - smoothstep(0.3, 0.85, impact));
+  float puffSize = width * (2.5 + impact * 6.0);
+  float puff = (1.0 - smoothstep(0.3, 1.0, length(q) / puffSize + (fbm(q / width * 0.5 + seed) - 0.5) * 0.6))
+    * landed * (1.0 - smoothstep(0.2, 1.0, impact)) * 0.55 * (1.0 - sonic);
+
+  vec3 color = mix(palette[0], palette[1], 0.5) * puff;
+  float alpha = puff;
+  float heat = clamp(tracer + muzzle + hitFlash + sparks, 0.0, 1.0);
+  float glow = smoothstep(0.02, 0.4, heat);
+  color = ramp(0.55 + heat * 0.45) * glow + color * (1.0 - glow);
+  alpha = glow + alpha * (1.0 - glow);
+  return half4(color, alpha);
+}
+`;
+
+/**
+ * Tir de blaster : un trait de lumière court au cœur presque blanc, entouré d'un halo de la couleur
+ * de l'élément, qui traverse l'écran sans laisser de traînée. Il touche la cible à 70 % de l'effet.
+ */
+const bolt = (timing: Timing) => `${common(timing, 1)}
+uniform vec2 target;
+uniform float width;
+
+half4 main(float2 coord) {
+  ${timing.main}
+  vec2 p = local(coord);
+  float len = max(length(target), 1.0);
+  vec2 dir = target / len;
+  float along = dot(p, dir);
+  float across = dot(p, vec2(-dir.y, dir.x));
+  float margin = width * 10.0;
+  if (along < -margin || along > len + margin || abs(across) > margin) return half4(0.0);
+
+  // La pointe file jusqu'au-delà de la cible, pour que la queue du trait y entre à son tour.
+  float boltLength = min(len * 0.45, width * 18.0);
+  float fly = clamp(t / 0.7, 0.0, 1.0);
+  float head = fly * (len + boltLength);
+  float lo = max(head - boltLength, 0.0);
+  float hi = min(head, len);
+  float body = 0.0;
+  float halo = 0.0;
+  if (hi > lo) {
+    float d = length(vec2(along - clamp(along, lo, hi), across)) / width;
+    // Léger scintillement, comme un trait d'énergie instable.
+    float flicker = 0.9 + 0.1 * sin(clock() * 90.0 + seed);
+    body = exp(-d * d * 3.0) * flicker;
+    halo = exp(-d * d * 0.3) * 0.75;
+  }
+
+  float r = length(p) / width;
+  float muzzle = exp(-r * r / 5.0) * (1.0 - smoothstep(0.0, 0.18, t));
+
+  float hitAt = 0.7 * len / (len + boltLength);
+  float impact = clamp((t - hitAt) / (1.0 - hitAt), 0.0, 1.0);
+  float landed = step(hitAt, t);
+  vec2 q = p - target;
+  float hq = length(q) / width;
+  float hitFlash = exp(-hq * hq / 4.0) * (1.0 - smoothstep(0.0, 0.45, impact)) * landed;
+  float ringOffset = (hq - impact * 7.0) / 0.9;
+  float ring = exp(-ringOffset * ringOffset) * (1.0 - smoothstep(0.1, 0.6, impact)) * landed * 0.7;
+  float sparks = 0.0;
+  for (int i = 0; i < 10; i++) {
+    float index = float(i) + seed;
+    float angle = hash(vec2(index, 5.7)) * 6.2832;
+    float speed = 3.0 + hash(vec2(index, 2.9)) * 6.0;
+    vec2 spark = q - vec2(cos(angle), sin(angle)) * speed * width * pow(impact, 0.6);
+    sparks += exp(-dot(spark, spark) / (width * width * 0.08));
+  }
+  sparks *= landed * (1.0 - smoothstep(0.35, 0.9, impact));
+
+  // Le cœur tire vers le blanc, le halo garde la couleur de l'élément.
+  float core = clamp(body + muzzle + hitFlash, 0.0, 1.0);
+  float outer = clamp(halo + ring + sparks * 0.8 + muzzle * 0.6 + hitFlash * 0.6, 0.0, 1.0);
+  float glow = smoothstep(0.02, 0.5, outer);
+  vec3 color = palette[1] * glow;
+  float alpha = glow;
+  float hot = smoothstep(0.15, 0.7, core);
+  color = mix(palette[2], vec3(1.0), 0.55) * hot + color * (1.0 - hot);
+  alpha = hot + alpha * (1.0 - hot);
   return half4(color, alpha);
 }
 `;
@@ -1104,6 +1297,8 @@ export const PROJECTILE_SKSL = projectile(BRIEF);
 export const BEAM_SKSL = beam(BRIEF);
 export const CONE_SKSL = cone(BRIEF);
 export const ARROW_SKSL = arrow(BRIEF);
+export const BULLET_SKSL = bullet(BRIEF);
+export const BOLT_SKSL = bolt(BRIEF);
 export const SLASH_SKSL = slash(BRIEF);
 export const BITE_SKSL = bite(BRIEF);
 export const METEOR_SKSL = meteor(BRIEF);
@@ -1117,11 +1312,240 @@ export const CUBE_SKSL = cube(BRIEF);
 export const CLOUD_SKSL = cloud(BRIEF);
 export const TRANSFORMATION_SKSL = transformation(BRIEF);
 export const FLAME_SKSL = flame(BRIEF);
+export const INVISIBILITY_SKSL = invisibility(BRIEF);
+
+/**
+ * États : de petits symboles posés sur un token, lisibles d'un coup d'œil. `radius` est le rayon du
+ * token, le haut de sa tête est donc en y = -1 (y descend). Chaque état décrit ses symboles par une
+ * distance signée : `shape` garde le plus proche, avec sa teinte (`shade`) et son opacité. Un liseré
+ * sombre les détache de n'importe quelle carte ; `glow` ajoute une lueur douce, de couleur `glowColor`.
+ * `beat` avance d'une unité toutes les 3 secondes, aussi bien pour l'effet bref que pour le durable.
+ */
+const SHAPES = `
+float dot2(vec2 v) {
+  return dot(v, v);
+}
+float segment(vec2 p, vec2 a, vec2 b) {
+  vec2 pa = p - a;
+  vec2 ba = b - a;
+  return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0));
+}
+// Cœur de hauteur 1, centré, pointe en bas.
+float heart(vec2 p) {
+  p = vec2(abs(p.x), 0.5 - p.y);
+  if (p.y + p.x > 1.0) return sqrt(dot2(p - vec2(0.25, 0.75))) - 0.35355;
+  return sqrt(min(dot2(p - vec2(0.0, 1.0)), dot2(p - 0.5 * max(p.x + p.y, 0.0)))) * sign(p.x - p.y);
+}
+// Étoile à cinq branches de rayon r, une pointe en haut.
+float star(vec2 p, float r) {
+  vec2 k1 = vec2(0.809017, -0.587785);
+  vec2 k2 = vec2(-k1.x, k1.y);
+  p = vec2(abs(p.x), -p.y);
+  p -= 2.0 * max(dot(k1, p), 0.0) * k1;
+  p -= 2.0 * max(dot(k2, p), 0.0) * k2;
+  p.x = abs(p.x);
+  p.y -= r;
+  vec2 ba = 0.45 * vec2(-k1.y, k1.x) - vec2(0.0, 1.0);
+  float h = clamp(dot(p, ba) / dot(ba, ba), 0.0, r);
+  return length(p - ba * h) * sign(p.y * ba.x - p.x * ba.y);
+}
+vec2 turned(vec2 p, float a) {
+  return vec2(cos(a) * p.x + sin(a) * p.y, cos(a) * p.y - sin(a) * p.x);
+}
+`;
+
+const condition = (body: string) => (timing: Timing) => `${common(timing, 3)}
+uniform float radius;
+${SHAPES}
+half4 main(float2 coord) {
+  vec2 p = local(coord) / radius;
+  float d = length(p);
+  if (d > 2.0) return half4(0.0);
+
+  float beat = clock();
+  float l = life();
+  float fade = smoothstep(0.0, 0.15, l) * (1.0 - smoothstep(0.85, 1.0, l));
+  float aa = 1.5 / radius;
+  vec3 fillColor = mix(palette[1], palette[2], 0.4);
+  vec3 glowColor = palette[1];
+  float shape = 1000.0;
+  float shade = 1.0;
+  // 1 : le symbole prend la couleur franche de l'élément au lieu de sa teinte claire.
+  float hue = 0.0;
+  float opacity = 1.0;
+  float glow = 0.0;
+${body}
+  float fill = 1.0 - smoothstep(-aa, aa, shape);
+  float symbol = (1.0 - smoothstep(-aa, aa, shape - 0.035)) * opacity;
+  vec3 color = mix(palette[0] * 0.3, clamp(mix(fillColor, palette[1], hue) * shade, 0.0, 1.0), fill);
+  float halo = clamp(glow, 0.0, 1.0) * (1.0 - symbol);
+  float alpha = (symbol + halo) * fade;
+  return half4((color * symbol + glowColor * halo) * fade, alpha);
+}
+`;
+
+/** Charmé : trois cœurs qui tournent au-dessus de la tête, en battant doucement. */
+const charmed = condition(`
+  for (int i = 0; i < 3; i++) {
+    float a = beat * 6.2832 + float(i) * 2.0944;
+    float depth = sin(a);
+    vec2 c = vec2(cos(a) * 0.62, -0.95 + depth * 0.16);
+    float s = 0.24 * (0.8 + 0.2 * depth) * (1.0 + 0.1 * sin(beat * 25.0 + float(i)));
+    float sd = heart((p - c) / s) * s;
+    if (sd < shape) { shape = sd; shade = 0.8 + 0.25 * depth; }
+  }
+  glow = exp(-dot2(vec2((d - 1.0) / 0.12, 0.0))) * 0.25 * (0.6 + 0.4 * sin(beat * 12.0));
+`);
+
+/** Endormi : des « Z » qui montent en grandissant, de plus en plus pâles. */
+const asleep = condition(`
+  for (int i = 0; i < 3; i++) {
+    float phase = fract(beat * 0.8 + float(i) / 3.0);
+    vec2 c = vec2(0.45 + phase * 0.45 + sin(phase * 9.0 + float(i)) * 0.05, -0.6 - phase * 0.85);
+    float s = 0.08 + phase * 0.1;
+    vec2 q = (p - c) / s;
+    float z = min(min(segment(q, vec2(-0.75, -0.8), vec2(0.75, -0.8)), segment(q, vec2(0.75, -0.8), vec2(-0.75, 0.8))),
+      segment(q, vec2(-0.75, 0.8), vec2(0.75, 0.8)));
+    float sd = (z - 0.2) * s;
+    if (sd < shape) { shape = sd; opacity = smoothstep(0.0, 0.15, phase) * (1.0 - smoothstep(0.7, 1.0, phase)); }
+  }
+  fillColor = mix(palette[2], vec3(1.0), 0.3);
+`);
+
+/** Étourdi : des étoiles qui tournent en rond au-dessus de la tête, sur une orbite à peine tracée. */
+const dazed = condition(`
+  for (int i = 0; i < 4; i++) {
+    float a = beat * 8.0 + float(i) * 1.5708;
+    float depth = sin(a);
+    vec2 c = vec2(cos(a) * 0.55, -0.9 + depth * 0.15);
+    float s = 0.14 * (0.8 + 0.2 * depth);
+    float sd = star(turned(p - c, beat * 10.0 + float(i)) / s, 1.0) * s;
+    if (sd < shape) { shape = sd; shade = 0.8 + 0.3 * depth; }
+  }
+  float orbit = length((p - vec2(0.0, -0.9)) / vec2(0.55, 0.15));
+  glow = exp(-dot2(vec2((orbit - 1.0) / 0.12, 0.0))) * 0.3;
+  fillColor = mix(palette[2], vec3(1.0, 0.95, 0.5), 0.35);
+`);
+
+/** Effrayé : des traits de frayeur qui tremblent tout autour, et une ombre qui ronge le bord du token. */
+const frightened = condition(`
+  float jitter = floor(beat * 30.0);
+  for (int i = 0; i < 9; i++) {
+    float fi = float(i);
+    float a = fi / 9.0 * 6.2832 + (hash(vec2(fi, jitter)) - 0.5) * 0.15;
+    float r0 = 1.08 + hash(vec2(fi + 3.0, jitter)) * 0.06;
+    float len = 0.17 + 0.07 * sin(beat * 19.0 + fi * 1.7);
+    vec2 u = vec2(cos(a), sin(a));
+    float sd = segment(p, u * r0, u * (r0 + len)) - 0.03;
+    if (sd < shape) { shape = sd; }
+  }
+  glow = (1.0 - smoothstep(0.85, 1.02, d)) * smoothstep(0.5, 0.95, d) * (0.35 + 0.35 * fbm(p * 5.0 + beat * 6.0));
+  glowColor = palette[0] * 0.6;
+  fillColor = mix(palette[2], vec3(1.0), 0.2);
+`);
+
+/** Paralysé : des arcs électriques qui sautent sur le pourtour du token. */
+const paralyzed = condition(`
+  float flick = floor(beat * 24.0);
+  float ang = atan(p.y, p.x);
+  vec2 around = vec2(cos(ang), sin(ang));
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    float start = hash(vec2(fi, flick)) * 6.2832;
+    float span = 0.5 + hash(vec2(fi + 7.0, flick)) * 0.6;
+    // Écart d'angle mesuré dans un seul sens : aucune coupure entre -π et π.
+    float off = mod(ang - start + 12.5664, 6.2832);
+    if (off < span) {
+      float r = 1.03 + (noise(around * 6.0 + vec2(fi * 3.1, flick)) - 0.5) * 0.24;
+      float sd = abs(d - r) - 0.02 * sin(off / span * 3.1416) - 0.005;
+      if (sd < shape) { shape = sd; }
+    }
+  }
+  glow = exp(-dot2(vec2((d - 1.03) / 0.1, 0.0))) * 0.35 * (0.6 + 0.4 * hash(vec2(flick, 1.0)));
+  fillColor = mix(palette[2], vec3(1.0), 0.5);
+`);
+
+/** Empoisonné : des bulles qui montent au-dessus de la tête et éclatent, sur un teint malade. */
+const poisoned = condition(`
+  for (int i = 0; i < 7; i++) {
+    float fi = float(i);
+    float phase = fract(beat * (0.7 + hash(vec2(fi, 2.0)) * 0.4) + hash(vec2(fi, 5.0)));
+    float x = (hash(vec2(fi, 9.0)) - 0.5) * 1.1 + sin(phase * 7.0 + fi) * 0.06;
+    vec2 c = vec2(x, -0.45 - phase * 0.9);
+    float s = 0.05 + hash(vec2(fi, 4.0)) * 0.05;
+    float pop = smoothstep(0.85, 1.0, phase);
+    float sd = min(abs(length(p - c) - s * (1.0 + pop)) - 0.014, length(p - c + vec2(0.4, 0.4) * s) - s * 0.22);
+    if (sd < shape) { shape = sd; opacity = smoothstep(0.0, 0.1, phase) * (1.0 - pop); }
+  }
+  glow = (1.0 - smoothstep(0.6, 1.0, d)) * 0.2 * (0.5 + fbm(p * 4.0 - vec2(0.0, beat * 3.0)));
+`);
+
+/** Concentration : un cercle de repères qui tourne lentement autour du token. */
+const concentrating = condition(`
+  float ang = atan(p.y, p.x) + beat * 1.5;
+  // Seize repères : le motif se répète un nombre entier de fois, donc sans coupure.
+  float sector = 6.2832 / 16.0;
+  float k = mod(ang, sector) - sector * 0.5;
+  vec2 q = vec2(k * 1.15, d - 1.15);
+  float tick = segment(q, vec2(0.0, -0.04), vec2(0.0, 0.04)) - 0.014;
+  shape = min(abs(d - 1.05) - 0.012, tick);
+  glow = exp(-dot2(vec2((d - 1.05) / 0.08, 0.0))) * 0.3 * (0.7 + 0.3 * sin(beat * 12.0));
+`);
+
+/** Ralenti : un sablier au-dessus de la tête, qui se vide puis se retourne, et des ondes molles autour. */
+const slowed = condition(`
+  // Cycle de 6 secondes : le sable coule, puis le sablier se retourne et tout recommence.
+  float cycle = fract(beat * 0.5);
+  float poured = smoothstep(0.0, 0.78, cycle);
+  float flip = smoothstep(0.8, 1.0, cycle) * 3.1416;
+  float s = 0.36;
+  vec2 q = turned(p - vec2(0.0, -1.2), flip) / s;
+  // Verre : deux barres et deux diagonales qui se croisent au milieu.
+  float glass = min(min(segment(q, vec2(-0.55, -1.0), vec2(0.55, -1.0)), segment(q, vec2(-0.55, 1.0), vec2(0.55, 1.0))),
+    min(segment(q, vec2(-0.48, -1.0), vec2(0.48, 1.0)), segment(q, vec2(0.48, -1.0), vec2(-0.48, 1.0)))) - 0.06;
+  // Sable : ce qui reste en haut, ce qui s'est amassé en bas, et le filet qui tombe entre les deux.
+  float cone = (abs(q.x) - 0.4 * abs(q.y)) * 0.93;
+  float top = max(cone, max(-0.85 * (1.0 - poured) - q.y, q.y));
+  float bottom = max(cone, max(1.0 - 0.85 * poured - q.y, q.y - 0.92));
+  float stream = poured < 1.0 && flip == 0.0 ? max(abs(q.x) - 0.035, max(-q.y, q.y - 1.0)) : 1000.0;
+  float sand = min(min(top, bottom), stream);
+  if (glass * s < shape) { shape = glass * s; shade = 1.15; }
+  if (sand * s < shape) { shape = sand * s; shade = 1.0; hue = 1.0; }
+  // Ondes lentes qui s'éloignent du token.
+  for (int i = 0; i < 3; i++) {
+    float phase = fract(beat * 0.35 + float(i) / 3.0);
+    float ringOffset = (d - 1.0 - phase * 0.45) / 0.05;
+    glow += exp(-ringOffset * ringOffset) * (1.0 - phase) * 0.35;
+  }
+  fillColor = mix(palette[2], vec3(1.0), 0.25);
+`);
+
+const CONDITIONS = {
+  charme: charmed,
+  sommeil: asleep,
+  etourdi: dazed,
+  effraye: frightened,
+  paralyse: paralyzed,
+  empoisonne: poisoned,
+  concentration: concentrating,
+  ralenti: slowed,
+};
+
+const mapConditions = (timing: Timing) =>
+  Object.fromEntries(Object.entries(CONDITIONS).map(([id, shader]) => [id, shader(timing)])) as Record<
+    keyof typeof CONDITIONS,
+    string
+  >;
+
+/** Version brève de chaque état. Un objet, pas une chaîne : chaque état a son shader. */
+export const CONDITION_SKSL = mapConditions(BRIEF);
 
 /** Version continue de chaque style. */
 export const DURABLE_SKSL = {
   pluie: rain(SUSTAINED),
   aura: aura(SUSTAINED),
+  invisibilite: invisibility(SUSTAINED),
+  ...mapConditions(SUSTAINED),
   mur: wall(SUSTAINED),
   dome: dome(SUSTAINED),
   cube: cube(SUSTAINED),
@@ -1137,6 +1561,9 @@ export const DURABLE_SKSL = {
   griffes: slash(still(0.45)),
   morsure: bite(still(0.78)),
   projectile: SCORCH_SKSL,
+  tir: SCORCH_SKSL,
+  rafale: SCORCH_SKSL,
+  blaster: SCORCH_SKSL,
   explosion: SCORCH_SKSL,
   meteore: SCORCH_SKSL,
   teleportation: teleportLoop,

@@ -293,6 +293,15 @@ function durableSpec(entry: DurableEntry, at: Point, dpi: number) {
   const cycle = (ms: number) => ({ name: "cycle", value: ms / 1000 });
   switch (style) {
     case "aura":
+    case "invisibilite":
+    case "charme":
+    case "sommeil":
+    case "etourdi":
+    case "effraye":
+    case "paralyse":
+    case "empoisonne":
+    case "concentration":
+    case "ralenti":
     case "dome":
     case "transformation":
     case "flamme":
@@ -379,6 +388,15 @@ function durableSpec(entry: DurableEntry, at: Point, dpi: number) {
     case "projectile":
       // Le sol brûlé sous l'impact : ses dimensions suivent celles de l'explosion qu'il laisse.
       return { sksl: DURABLE_SKSL.projectile, position: at, uniforms: [...common, smoke, { name: "radius", value: dpi * scale * 0.75 }] };
+    case "tir":
+    case "rafale":
+    case "blaster":
+      // Une petite marque d'impact, plus nette pour le blaster.
+      return {
+        sksl: DURABLE_SKSL[style],
+        position: at,
+        uniforms: [...common, smoke, { name: "radius", value: dpi * scale * (style === "blaster" ? 0.3 : 0.2) }],
+      };
     case "explosion":
     case "meteore":
       return {

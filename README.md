@@ -9,8 +9,8 @@ The guide shows every feature in short videos, and lets you play all the effects
 
 ## What it does
 
-- **16 elements × 20 styles:** strikes, claws, arrows, projectiles, beams, cones, explosions, meteors, walls, domes,
-  auras, chains, teleports and more.
+- **16 elements × 32 styles:** strikes, claws, arrows, gunshots, blasters, projectiles, beams, cones, explosions, meteors, walls, domes,
+  auras, chains, teleports, invisibility, conditions (charmed, asleep, stunned…) and more.
 - **Lasting effects** that stay on the map or follow a token until you remove them, even for players who join later.
 - **Token spells:** up to 8 spells saved on a token, cast from a wheel by anyone who controls it.
 - **Programs** that recast effects on their own: a cannon firing every few seconds, a storm striking at random.
